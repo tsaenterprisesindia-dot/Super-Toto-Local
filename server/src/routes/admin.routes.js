@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import path from 'path';
+import fs from 'fs';
 import User from '../models/User.js';
 import Ride from '../models/Ride.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { getPricingConfig, savePricingConfig } from '../services/settings.js';
-import { PRICING } from '../utils/pricing.js';
+import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
+import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 
 export default function adminRoutes() {
   const router = Router();
@@ -355,6 +357,114 @@ export default function adminRoutes() {
 
   // --- End financial settlement --------------------------------------------
 
+  // --- Driver document management -------------------------------------------
+
+  router.get('/drivers/:id/documents', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.params.id).select('name documents driverStatus vehicleType vehicleNumber aadhaarNumber');
+      if (!user || user.role !== 'driver') return res.status(404).json({ message: 'Driver not found' });
+      res.json({ driver: { name: user.name, driverStatus: user.driverStatus, vehicleType: user.vehicleType, vehicleNumber: user.vehicleNumber, aadhaarNumber: user.aadhaarNumber || '' }, documents: user.documents || [] });
+    } catch (err) { next(err); }
+  });
+
+  router.patch('/drivers/:id/documents/:docId', async (req, res, next) => {
+    try {
+      const { action, rejectionReason } = req.body;
+      if (!['approve', 'reject'].includes(action)) {
+        return res.status(400).json({ message: 'Action must be "approve" or "reject"' });
+      }
+      const user = await User.findById(req.params.id);
+      if (!user || user.role !== 'driver') return res.status(404).json({ message: 'Driver not found' });
+
+      const doc = user.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+      doc.status = action === 'approve' ? 'approved' : 'rejected';
+      doc.reviewedAt = new Date();
+      doc.reviewedBy = req.userDoc._id;
+      if (action === 'reject') doc.rejectionReason = (rejectionReason || '').trim() || 'Does not meet requirements';
+
+      await user.save();
+      res.json({ document: doc, message: `Document ${action === 'approve' ? 'approved' : 'rejected'}` });
+    } catch (err) { next(err); }
+  });
+
+  router.get('/drivers/:id/documents/:docId/download', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.params.id).select('documents');
+      if (!user) return res.status(404).json({ message: 'Driver not found' });
+      const doc = user.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+      const filePath = path.join(process.cwd(), 'uploads', doc.filename);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on disk' });
+
+      const ext = path.extname(doc.filename).toLowerCase();
+      const mimeTypes = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+      res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${doc.originalName || doc.filename}"`);
+      fs.createReadStream(filePath).pipe(res);
+    } catch (err) { next(err); }
+  });
+
+  // --- End driver document management ---------------------------------------
+
+  // --- Rider document management --------------------------------------------
+
+  router.get('/riders/:id/documents', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.params.id).select('name documents aadhaarNumber phoneVerified aadhaarVerified');
+      if (!user || user.role !== 'rider') return res.status(404).json({ message: 'Rider not found' });
+      res.json({ rider: { name: user.name, aadhaarNumber: user.aadhaarNumber, phoneVerified: user.phoneVerified, aadhaarVerified: user.aadhaarVerified }, documents: user.documents || [] });
+    } catch (err) { next(err); }
+  });
+
+  router.patch('/riders/:id/documents/:docId', async (req, res, next) => {
+    try {
+      const { action, rejectionReason } = req.body;
+      if (!['approve', 'reject'].includes(action)) {
+        return res.status(400).json({ message: 'Action must be "approve" or "reject"' });
+      }
+      const user = await User.findById(req.params.id);
+      if (!user || user.role !== 'rider') return res.status(404).json({ message: 'Rider not found' });
+
+      const doc = user.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+      doc.status = action === 'approve' ? 'approved' : 'rejected';
+      doc.reviewedAt = new Date();
+      doc.reviewedBy = req.userDoc._id;
+      if (action === 'reject') doc.rejectionReason = (rejectionReason || '').trim() || 'Does not meet requirements';
+
+      if (doc.type === 'aadhaar' && action === 'approve') {
+        user.aadhaarVerified = true;
+      }
+
+      await user.save();
+      res.json({ document: doc, message: `Document ${action === 'approve' ? 'approved' : 'rejected'}` });
+    } catch (err) { next(err); }
+  });
+
+  router.get('/riders/:id/documents/:docId/download', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.params.id).select('documents');
+      if (!user) return res.status(404).json({ message: 'Rider not found' });
+      const doc = user.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+      const filePath = path.join(process.cwd(), 'uploads', doc.filename);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on disk' });
+
+      const ext = path.extname(doc.filename).toLowerCase();
+      const mimeTypes = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png' };
+      res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${doc.originalName || doc.filename}"`);
+      fs.createReadStream(filePath).pipe(res);
+    } catch (err) { next(err); }
+  });
+
+  // --- End rider document management ----------------------------------------
+
   router.get('/riders', async (_req, res, next) => {
     try {
       const riders = await User.find({ role: 'rider' })
@@ -401,6 +511,21 @@ export default function adminRoutes() {
     }
   });
 
+  // --- Vehicle rate chart (admin only) ---
+  router.get('/vehicle-rates', async (_req, res, next) => {
+    try {
+      const rates = await getVehicleRatesConfig();
+      res.json({ vehicleTypes: VEHICLE_TYPES, rates });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/vehicle-rates', async (req, res, next) => {
+    try {
+      const rates = await saveVehicleRatesConfig(req.body);
+      res.json({ rates, message: 'Vehicle rates updated' });
+    } catch (err) { next(err); }
+  });
+
   // Admin-editable pricing configuration (admin only, enforced by the router guard).
   router.get('/settings', async (_req, res, next) => {
     try {
@@ -417,6 +542,281 @@ export default function adminRoutes() {
     } catch (err) {
       next(err);
     }
+  });
+
+  // --- Feedback / Review configuration (admin only) ---
+  router.get('/feedback-config', async (_req, res, next) => {
+    try {
+      res.json({ feedbackConfig: await getFeedbackConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/feedback-config', async (req, res, next) => {
+    try {
+      const feedbackConfig = await saveFeedbackConfig(req.body);
+      res.json({ feedbackConfig, message: 'Feedback config updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Ads configuration (admin only) ---
+  router.get('/ads-config', async (_req, res, next) => {
+    try {
+      res.json({ adsConfig: await getAdsConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/ads-config', async (req, res, next) => {
+    try {
+      const adsConfig = await saveAdsConfig(req.body);
+      res.json({ adsConfig, message: 'Ads config updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Safety Tips configuration (admin only) ---
+  router.get('/safety-tips', async (_req, res, next) => {
+    try {
+      res.json({ safetyTips: await getSafetyTipsConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/safety-tips', async (req, res, next) => {
+    try {
+      const safetyTips = await saveSafetyTipsConfig(req.body);
+      res.json({ safetyTips, message: 'Safety tips config updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Bike Taxi configuration (admin only) ---
+  router.get('/bike-taxi', async (_req, res, next) => {
+    try {
+      res.json({ bikeTaxiConfig: await getBikeTaxiConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/bike-taxi', async (req, res, next) => {
+    try {
+      const bikeTaxiConfig = await saveBikeTaxiConfig(req.body);
+      res.json({ bikeTaxiConfig, message: 'Bike taxi config updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- CSV export of all user verification data ---
+  router.get('/export/users', async (_req, res, next) => {
+    try {
+      const users = await User.find({})
+        .select('-password -resetCode -resetExpires -faceDescriptor')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const DOC_LABELS = { aadhaar: 'Aadhaar', rc: 'Vehicle RC', license: 'Driving License', bank: 'Bank Details', photo: 'Photo', pcc: 'Police Clearance', insurance: 'Insurance', puc: 'PUC' };
+
+      const header = [
+        'Name', 'Email', 'Phone', 'Role',
+        'Aadhaar Number', 'Phone Verified', 'Aadhaar Verified',
+        'Vehicle Type', 'Vehicle Number', 'Driver Status',
+        'Terms Accepted', 'Privacy Consent', 'Aggregator Agreement', 'Training Ack', 'Account Status',
+        'Aadhaar Doc', 'RC Doc', 'License Doc', 'Bank Doc', 'Photo Doc', 'PCC Doc',
+        'Total Rides', 'Earnings', 'Rating',
+        'Registered At',
+      ];
+
+      const escapeCsv = (val) => {
+        const s = String(val == null ? '' : val);
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      };
+
+      const rows = users.map((u) => {
+        const docStatus = {};
+        (u.documents || []).forEach((d) => { docStatus[d.type] = d.status; });
+
+        let accountStatus = 'Active';
+        if (u.isHidden) accountStatus = 'Hidden';
+        else if (u.suspension?.active) accountStatus = 'Suspended';
+
+        return [
+          u.name, u.email || '', u.phone || '', u.role,
+          u.aadhaarNumber || '', u.phoneVerified ? 'Yes' : 'No', u.aadhaarVerified ? 'Yes' : 'No',
+          u.vehicleType || '', u.vehicleNumber || '', u.driverStatus || '',
+          u.termsAcceptedAt ? new Date(u.termsAcceptedAt).toLocaleDateString('en-IN') : 'No',
+          u.privacyConsentAt ? new Date(u.privacyConsentAt).toLocaleDateString('en-IN') : 'No',
+          u.aggregatorAgreementAcceptedAt ? new Date(u.aggregatorAgreementAcceptedAt).toLocaleDateString('en-IN') : 'No',
+          u.trainingAcknowledgedAt ? new Date(u.trainingAcknowledgedAt).toLocaleDateString('en-IN') : 'No',
+          accountStatus,
+          docStatus.aadhaar || '—', docStatus.rc || '—', docStatus.license || '—', docStatus.bank || '—', docStatus.photo || '—', docStatus.pcc || '—',
+          u.totalRides || 0, u.earnings || 0, u.rating || 5,
+          u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '',
+        ];
+      });
+
+      const csv = [header.map(escapeCsv).join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join('\n');
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="supertoto_users_export_${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // --- UPI Payment Configuration (admin only) ---
+  router.get('/upi-config', async (_req, res, next) => {
+    try {
+      res.json({ upiConfig: await getUpiConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/upi-config', async (req, res, next) => {
+    try {
+      const upiConfig = await saveUpiConfig(req.body);
+      res.json({ upiConfig, message: 'UPI settings updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Contact / Helpline Configuration (admin only) ---
+  router.get('/contact-config', async (_req, res, next) => {
+    try {
+      res.json({ contactConfig: await getContactConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/contact-config', async (req, res, next) => {
+    try {
+      const contactConfig = await saveContactConfig(req.body);
+      res.json({ contactConfig, message: 'Contact settings updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Chatbot Configuration (admin only) ---
+  router.get('/chatbot-config', async (_req, res, next) => {
+    try {
+      res.json({ chatbotConfig: await getChatbotConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/chatbot-config', async (req, res, next) => {
+    try {
+      const chatbotConfig = await saveChatbotConfig(req.body);
+      res.json({ chatbotConfig, message: 'Chatbot settings updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Seat Booking Configuration (admin only) ---
+  router.get('/seat-booking', async (_req, res, next) => {
+    try {
+      res.json({ seatBookingConfig: await getSeatBookingConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/seat-booking', async (req, res, next) => {
+    try {
+      const seatBookingConfig = await saveSeatBookingConfig(req.body);
+      res.json({ seatBookingConfig, message: 'Seat booking settings updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Compliance Configuration (GoI) (admin only) ---
+  router.get('/compliance', async (_req, res, next) => {
+    try {
+      res.json({ compliance: await getComplianceConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/compliance', async (req, res, next) => {
+    try {
+      const compliance = await saveComplianceConfig(req.body || {});
+      res.json({ compliance, message: 'Compliance settings updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Driver Training Configuration (admin only) ---
+  router.get('/training', async (_req, res, next) => {
+    try {
+      res.json({ training: await getTrainingConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/training', async (req, res, next) => {
+    try {
+      const training = await saveTrainingConfig(req.body || {});
+      res.json({ training, message: 'Training modules updated' });
+    } catch (err) { next(err); }
+  });
+
+  // --- State-wise Fare Policies (admin only) ---
+  router.get('/state-fares', async (_req, res, next) => {
+    try {
+      const fares = await getStateFares();
+      const states = INDIA_STATES.map((s) => ({ ...s, policy: fares[s.code] || null }));
+      res.json({ states, vehicleTypes: await getVehicleRatesConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.get('/state-fares/:stateCode', async (req, res, next) => {
+    try {
+      const policy = await getStateFarePolicy(req.params.stateCode, { activeOnly: false });
+      res.json({ policy });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/state-fares/:stateCode', async (req, res, next) => {
+    try {
+      const policy = await saveStateFarePolicy(req.params.stateCode, req.body || {}, req.user?.email || 'admin');
+      res.json({ policy, message: 'Fare policy saved' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Government data-sharing feed (Aggregator Guidelines 2020) ---
+  // CSV of every trip: shared with authorities for safety, statistical & enforcement purposes.
+  router.get('/export/trips', async (_req, res, next) => {
+    try {
+      const from = _req.query.from ? new Date(_req.query.from) : null;
+      const to = _req.query.to ? new Date(_req.query.to) : null;
+      const q = {};
+      if (from || to) {
+        q.createdAt = {};
+        if (from) q.createdAt.$gte = from;
+        if (to) q.createdAt.$lte = to;
+      }
+      const rides = await Ride.find(q)
+        .populate('rider', 'name phone')
+        .populate('driver', 'name phone vehicleNumber vehicleType')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const header = [
+        'Trip ID', 'Requested At', 'Completed At', 'Status',
+        'Rider Name', 'Rider Phone', 'Driver Name', 'Driver Phone',
+        'Vehicle Number', 'Vehicle Type', 'Pickup', 'Drop',
+        'Distance (km)', 'Duration (min)', 'Fare (Rs)', 'GST (Rs)',
+        'Surge', 'Payment Status', 'Payment Method',
+      ];
+      const escapeCsv = (val) => {
+        const s = String(val == null ? '' : val);
+        if (/(,|"|\n)/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      };
+      const rows = rides.map((r) => [
+        String(r._id),
+        r.requestedAt ? new Date(r.requestedAt).toISOString() : '',
+        r.completedAt ? new Date(r.completedAt).toISOString() : '',
+        r.status,
+        r.rider?.name || '', r.rider?.phone || '',
+        r.driver?.name || '', r.driver?.phone || '',
+        r.driver?.vehicleNumber || '', r.driver?.vehicleType || '',
+        r.pickup?.name || '', r.drop?.name || '',
+        r.distanceKm || 0, r.durationMin || 0,
+        r.fare || 0, r.fareBreakup?.gst || 0,
+        r.fareBreakup?.surge || 1,
+        r.payment?.status || '', r.payment?.method || '',
+      ]);
+      const csv = [header.map(escapeCsv).join(','), ...rows.map((r) => r.map(escapeCsv).join(','))].join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="supertoto_trips_export_${new Date().toISOString().slice(0, 10)}.csv"`);
+      res.send(csv);
+    } catch (err) { next(err); }
   });
 
   return router;

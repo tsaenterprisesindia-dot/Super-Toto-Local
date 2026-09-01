@@ -8,6 +8,13 @@ const LINKS = [
   { to: '/admin/riders', label: '👤 Riders' },
   { to: '/admin/rides', label: '🚕 Rides' },
   { to: '/admin/reports', label: '💰 Reports' },
+  { to: '/admin/vehicle-rates', label: '🚗 Vehicle Rates' },
+  { to: '/admin/state-fares', label: '🗺️ State Fares' },
+  { to: '/admin/ads', label: '📢 Ad Manager' },
+  { to: '/admin/safety-tips', label: '🛡️ Safety Tips' },
+  { to: '/admin/bike-taxi', label: '🏍️ Bike Taxi' },
+  { to: '/admin/feedback', label: '💬 Feedback' },
+  { to: '/admin/compliance', label: '🗂️ Compliance' },
   { to: '/admin/settings', label: '⚙️ Settings' },
 ];
 

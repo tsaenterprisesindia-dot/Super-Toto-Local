@@ -6,16 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "i18n:sync": "node scripts/sync-translations.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
     "axios": "^1.7.4",
+    "i18next": "^26.4.0",
     "leaflet": "^1.9.4",
+    "qrcode.react": "^4.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^17.0.12",
     "react-leaflet": "^4.2.1",
     "react-router-dom": "^6.26.0",
     "socket.io-client": "^4.7.5"

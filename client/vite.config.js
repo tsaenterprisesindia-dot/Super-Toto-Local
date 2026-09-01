@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: '::',
     port: 5173,
     proxy: {
       '/api': {
@@ -15,6 +16,9 @@ export default defineConfig({
         changeOrigin: true,
         ws: true,
       },
+    },
+    watch: {
+      ignored: ['**/android/**', '**/dist/**', '**/node_modules/**', '**/.git/**'],
     },
   },
 });

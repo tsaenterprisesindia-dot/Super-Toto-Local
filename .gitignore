@@ -4,3 +4,14 @@ dist/
 *.log
 *.pid
 .DS_Store
+
+# Uploaded documents
+server/uploads/
+
+# Play Store release signing secrets
+PLAY_STORE/keys/
+client/android/keystore.properties
+
+# Runtime / transient artifacts
+server/src/.otp-store.json
+client/android/build-log.txt

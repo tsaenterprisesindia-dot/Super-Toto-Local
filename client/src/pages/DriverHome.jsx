@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import client from '../api/client.js';
 import Nav from '../components/Nav.jsx';
 import WarningBanner from '../components/WarningBanner.jsx';
 import Modal from '../components/Modal.jsx';
 import RideTracker from '../components/RideTracker.jsx';
+import SafetyTips from '../components/SafetyTips.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import { moveToward, jitter, formatINR, DESTINATIONS } from '../utils/geo.js';
@@ -168,6 +170,9 @@ export default function DriverHome() {
               can go online. Try the seeded account <code>driver@supertoto.local / demo123</code> to
               see the full driver flow.
             </p>
+            <Link to="/driver/documents" className="btn btn-primary" style={{ display: 'inline-block', marginTop: 8 }}>
+              📄 Upload Documents
+            </Link>
           </div>
         ) : (
           <>
@@ -210,6 +215,14 @@ export default function DriverHome() {
               </div>
             </div>
 
+            <Link to="/driver/documents" className="btn btn-ghost btn-block mb" style={{ textAlign: 'center' }}>
+              📄 View / Upload Documents
+            </Link>
+
+            <Link to="/driver/vehicle" className="btn btn-ghost btn-block mb" style={{ textAlign: 'center' }}>
+              🚗 Vehicle Details
+            </Link>
+
             {ride ? (
               <>
                 <div className="alert alert-info mb">
@@ -248,6 +261,7 @@ export default function DriverHome() {
                 </p>
               </div>
             )}
+            <SafetyTips role="driver" />
           </>
         )}
       </div>
@@ -272,10 +286,31 @@ export default function DriverHome() {
                 <span className="muted small">Distance</span>
                 <b>{request.distanceKm} km · ~{request.durationMin} min</b>
               </div>
-              <div className="spread" style={{ fontSize: 20, fontWeight: 800 }}>
-                <span>Rider pays</span>
-                <span style={{ color: 'var(--brand-dark)' }}>{formatINR(request.fare)}</span>
+              {request.shared?.enabled && (
+                <div className="spread">
+                  <span className="muted small">{request.shared?.mode === 'reserved' || request.shared?.reserved ? 'Reserved vehicle' : 'Shared trip · seats'}</span>
+                  <b>
+                    {request.shared?.mode === 'reserved' || request.shared?.reserved ? (
+                      <span className="badge badge-blue">🪑 {request.shared.seatCount} seats · whole vehicle</span>
+                    ) : (
+                      <span className="badge badge-green">🪑 {request.shared.seatsTaken} / {request.shared.seatCount} booked</span>
+                    )}
+                  </b>
+                </div>
+              )}
+              <div className="small muted" style={{ fontStyle: 'italic' }}>
+                * Time estimates are approximate and may vary depending on road, traffic, and vehicle conditions.
               </div>
+              <div className="spread" style={{ fontSize: 20, fontWeight: 800 }}>
+                <span>{request.shared?.enabled ? (request.shared?.mode === 'reserved' || request.shared?.reserved ? 'Rider pays (whole vehicle)' : 'Trip fare (whole vehicle)') : 'Rider pays'}</span>
+                <span style={{ color: 'var(--brand-dark)' }}>{formatINR(request.shared?.enabled ? (request.fareBreakup?.total || request.fare) : request.fare)}</span>
+              </div>
+              {request.shared?.enabled && request.shared?.mode !== 'reserved' && !request.shared?.reserved && (
+                <div className="spread">
+                  <span className="muted">Booked so far</span>
+                  <b>{formatINR(request.shared.seatsTaken * (request.shared.perSeatFare || 0))} · {formatINR(request.shared.perSeatFare || 0)}/seat</b>
+                </div>
+              )}
               <div className="spread">
                 <span className="muted">You earn (after commission)</span>
                 <b>{formatINR(request.fareBreakup?.driverEarnings)}</b>

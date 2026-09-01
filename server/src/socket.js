@@ -1,16 +1,15 @@
 import jwt from 'jsonwebtoken';
 import User from './models/User.js';
 import Ride from './models/Ride.js';
-import { haversineKm } from './utils/pricing.js';
+import { haversineKm, VEHICLE_TYPES } from './utils/pricing.js';
 import { getPricingConfig } from './services/settings.js';
 
-const RIDE_REQUEST_TIMEOUT_MS = 25000;
 const dispatchTimers = new Map();
 
 export async function toRideDTO(rideId) {
   const ride = await Ride.findById(rideId)
     .populate('rider', 'name phone rating ratingsCount')
-    .populate('driver', 'name phone vehicleType vehicleNumber rating ratingsCount location');
+    .populate('driver', 'name phone vehicleType vehicleNumber vehicleDetails rating ratingsCount location');
   return ride ? ride.toObject() : null;
 }
 
@@ -18,8 +17,13 @@ export function emitRideUpdate(io, rideId) {
   if (!io) return;
   void toRideDTO(rideId).then((ride) => {
     if (!ride) return;
-    if (ride.rider) io.to(`user:${ride.rider._id}`).emit('ride:updated', ride);
-    if (ride.driver) io.to(`user:${ride.driver._id}`).emit('ride:updated', ride);
+    const userIds = new Set();
+    if (ride.rider) userIds.add(String(ride.rider._id || ride.rider));
+    if (ride.driver) userIds.add(String(ride.driver._id || ride.driver));
+    (ride.occupants || []).forEach((o) => {
+      if (o.rider) userIds.add(String(o.rider._id || o.rider));
+    });
+    userIds.forEach((uid) => io.to(`user:${uid}`).emit('ride:updated', ride));
     io.to(`ride:${rideId}`).emit('ride:updated', ride);
   });
 }
@@ -32,6 +36,24 @@ export function clearDispatchTimer(rideId) {
   }
 }
 
+// Save a ride during dispatch, safely. The rider can accept/cancel/reassign a ride
+// at any moment while the background dispatch chain is running, so concurrent
+// saves of the same document can otherwise throw a Mongoose VersionError. This
+// re-checks the ride is still awaiting a driver right before persisting and backs
+// off (instead of erroring) if the document was changed elsewhere.
+async function dispatchSave(ride) {
+  if (!ride || ride.status !== 'requested') return false;
+  try {
+    await ride.save();
+    return true;
+  } catch (err) {
+    // Optimistic-concurrency conflict: the ride was modified concurrently
+    // (e.g. accepted, cancelled, reassigned). Back off from dispatching.
+    if (err && err.name === 'VersionError') return false;
+    throw err;
+  }
+}
+
 export async function dispatchNext(io, rideId) {
   clearDispatchTimer(rideId);
   const ride = await Ride.findById(rideId);
@@ -39,22 +61,29 @@ export async function dispatchNext(io, rideId) {
 
   if (!ride.pendingDrivers.length) {
     ride.status = 'no_driver';
-    await ride.save();
+    try {
+      await ride.save();
+    } catch (err) {
+      if (err && err.name !== 'VersionError') throw err;
+    }
     emitRideUpdate(io, rideId);
     return;
   }
 
+  const cfg = await getPricingConfig();
+  const timeoutMs = (cfg.dispatchTimeoutSec || 25) * 1000;
+
   const driverId = ride.pendingDrivers.shift();
-  await ride.save();
+  if (!(await dispatchSave(ride))) return;
 
   const dto = await toRideDTO(rideId);
   if (!dto) return;
   io.to(`user:${driverId}`).emit('ride:request', {
     ...dto,
-    timeLeftMs: RIDE_REQUEST_TIMEOUT_MS,
+    timeLeftMs: timeoutMs,
   });
 
-  const timer = setTimeout(() => dispatchNext(io, rideId), RIDE_REQUEST_TIMEOUT_MS);
+  const timer = setTimeout(() => { void dispatchNext(io, rideId); }, timeoutMs);
   dispatchTimers.set(String(rideId), timer);
 }
 
@@ -62,6 +91,8 @@ export async function dispatchRideRequest(io, rideId) {
   const ride = await Ride.findById(rideId);
   if (!ride) return;
 
+  const rideVehicleType = ride.vehicleType || 'toto';
+  const vehicleLabels = VEHICLE_TYPES.filter((v) => v.id === rideVehicleType).map((v) => v.label);
   const candidates = await User.find({
     role: 'driver',
     driverStatus: 'approved',
@@ -70,6 +101,11 @@ export async function dispatchRideRequest(io, rideId) {
     'suspension.active': { $ne: true },
     currentRide: null,
     'location.lat': { $ne: null },
+    $or: [
+      { vehicleType: { $in: [rideVehicleType, ...vehicleLabels].filter(Boolean) } },
+      { vehicleType: { $exists: false } },
+      { vehicleType: '' },
+    ],
   });
 
   const cfg = await getPricingConfig();
@@ -79,7 +115,7 @@ export async function dispatchRideRequest(io, rideId) {
     .sort((a, b) => a.dist - b.dist);
 
   ride.pendingDrivers = near.map((x) => x.d._id);
-  await ride.save();
+  if (!(await dispatchSave(ride))) return;
   await dispatchNext(io, rideId);
 }
 
@@ -122,7 +158,11 @@ export function setupSocket(io) {
     socket.on('ride:join', async (rideId) => {
       const ride = await Ride.findById(rideId);
       if (!ride) return;
-      if (String(ride.rider) === String(id) || String(ride.driver) === String(id)) {
+      const isOcc =
+        String(ride.rider) === String(id) ||
+        String(ride.driver) === String(id) ||
+        (ride.occupants || []).some((o) => String(o.rider) === String(id));
+      if (isOcc) {
         socket.join(`ride:${rideId}`);
       }
     });

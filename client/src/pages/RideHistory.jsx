@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import client from '../api/client.js';
 import Nav from '../components/Nav.jsx';
+import AdBanner from '../components/AdBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatINR, timeAgo, PAYMENT_METHODS } from '../utils/geo.js';
 
@@ -36,6 +37,9 @@ export default function RideHistory() {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [invId, setInvId] = useState(null);
+  const [invoice, setInvoice] = useState(null);
+  const [invBusy, setInvBusy] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -58,6 +62,69 @@ export default function RideHistory() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const loadInvoice = async (id) => {
+    if (invId === id && invoice) {
+      setInvId(null);
+      setInvoice(null);
+      return;
+    }
+    setInvId(id);
+    setInvBusy(true);
+    setInvoice(null);
+    try {
+      const { data } = await client.get(`/rides/${id}/invoice`);
+      setInvoice(data.invoice);
+    } catch (e) {
+      alert(e.response?.data?.message || 'Could not load invoice');
+      setInvId(null);
+    } finally {
+      setInvBusy(false);
+    }
+  };
+
+  const invRow = (label, value, bold) => (
+    <div className="spread" key={label}>
+      <span className="muted">{label}</span>
+      <b style={bold ? { fontWeight: 800 } : undefined}>{formatINR(value)}</b>
+    </div>
+  );
+
+  const renderInvoice = () => {
+    if (!invoice) return null;
+    const b = invoice.breakup || {};
+    return (
+      <div className="mt" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--bg)' }}>
+        <div className="spread">
+          <b>GST Invoice</b>
+          <span className="badge badge-green">{invoice.invoiceNo}</span>
+        </div>
+        <div className="small muted mt">
+          {new Date(invoice.invoiceDate).toLocaleString('en-IN')} · {invoice.item}
+        </div>
+        <div className="small muted">
+          {invoice.issuer?.name} · GSTIN: {invoice.issuer?.gstin}
+          {invoice.issuer?.insurancePolicyNo ? ` · Policy: ${invoice.issuer.insurancePolicyNo}` : ''}
+        </div>
+        <div className="small">
+          {invoice.trip?.pickup} → {invoice.trip?.drop} · {invoice.trip?.distanceKm} km · ~{invoice.trip?.durationMin} min
+        </div>
+        <div className="mt" style={{ fontSize: 13 }}>
+          {invRow('Base fare', b.base)}
+          {invRow(`Distance (${invoice.trip?.distanceKm} km)`, b.distance)}
+          {invRow(`Time (${invoice.trip?.durationMin} min)`, b.time)}
+          {b.luggage > 0 && invRow('Luggage', b.luggage)}
+          {invoice.trip?.status !== 'cancelled_by_rider' && b.gross - b.subtotal > 0 && invRow(`Surge ×${b.surgeMultiplier}`, b.gross - b.subtotal)}
+          {invRow('Subtotal', b.subtotal)}
+          {invRow(invoice.gstTitle || 'GST', b.gst)}
+          {invRow('Grand total', b.gross + b.gst, true)}
+        </div>
+        {invoice.passengerInsurance && (
+          <div className="small muted mt">🛡️ {invoice.passengerInsurance}</div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -92,6 +159,9 @@ export default function RideHistory() {
                       </b>
                       <div className="small muted">
                         {timeAgo(r.createdAt)} · {r.distanceKm} km · ~{r.durationMin} min
+                      </div>
+                      <div className="small muted" style={{ fontStyle: 'italic' }}>
+                        * Time is approximate; actual time may vary.
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
@@ -132,12 +202,25 @@ export default function RideHistory() {
                       {r.driverRating ? ` · you rated ⭐ ${r.driverRating}` : ''}
                     </div>
                   )}
+                  {['completed', 'cancelled_by_rider'].includes(r.status) && (
+                    <>
+                      <button
+                        className="btn btn-ghost btn-block mt"
+                        disabled={invBusy && invId === r._id}
+                        onClick={() => loadInvoice(r._id)}
+                      >
+                        {invId === r._id && invoice ? 'Hide invoice' : invId === r._id && !invoice ? 'Loading…' : '🧾 GST invoice'}
+                      </button>
+                      {invId === r._id && renderInvoice()}
+                    </>
+                  )}
                 </div>
               );
             })}
           </div>
         )}
       </div>
+      <AdBanner />
     </>
   );
 }

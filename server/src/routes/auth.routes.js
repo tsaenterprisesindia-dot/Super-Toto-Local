@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import User from '../models/User.js';
-import { signToken, requireAuth } from '../middleware/auth.js';
+import { signToken, requireAuth, requireRole } from '../middleware/auth.js';
 import { createCaptcha, verifyCaptcha } from '../utils/captcha.js';
 import { normalizePhone } from '../utils/phone.js';
 import { createOtp, verifyOtp } from '../utils/otp.js';
+import { validateAadhaar } from '../utils/aadhaar.js';
 
 // Resolve an account by an email address or an Indian mobile number.
 // 'identifier' may be either; returns the matching User (or null).
@@ -29,7 +30,7 @@ export default function authRoutes() {
 
   router.post('/register', async (req, res, next) => {
     try {
-      const { name, email, phone: rawPhone, password, role, vehicleType, vehicleNumber, otp } = req.body;
+      const { name, email, phone: rawPhone, password, role, vehicleType, vehicleNumber, aadhaarNumber, otp, privacyConsent } = req.body;
       if (!name || !password) {
         return res.status(400).json({ message: 'Name and password are required' });
       }
@@ -57,6 +58,28 @@ export default function authRoutes() {
       }
 
       const userRole = ['rider', 'driver'].includes(role) ? role : 'rider';
+
+      // DPDP 2023: capture explicit consent (required for non-admin accounts)
+      if (userRole !== 'admin' && privacyConsent !== true && String(privacyConsent) !== 'true') {
+        return res.status(400).json({ message: 'You must consent to the Privacy Policy to create an account' });
+      }
+
+      // Both riders and drivers must provide a valid 12-digit Aadhaar number (Verhoeff checksum verified)
+      let aadhaar = '';
+      {
+        aadhaar = String(aadhaarNumber || '').replace(/[\s\-]/g, '');
+        if (!aadhaar || aadhaar.length !== 12 || !/^\d{12}$/.test(aadhaar)) {
+          return res.status(400).json({ message: 'A valid 12-digit Aadhaar number is required' });
+        }
+        if (!validateAadhaar(aadhaar)) {
+          return res.status(400).json({ message: 'Invalid Aadhaar number. Please check and re-enter.' });
+        }
+        const dup = await User.findOne({ aadhaarNumber: aadhaar });
+        if (dup) {
+          return res.status(409).json({ message: 'This Aadhaar number is already registered' });
+        }
+      }
+
       const hashed = await bcrypt.hash(password, 10);
 
       const user = await User.create({
@@ -65,6 +88,13 @@ export default function authRoutes() {
         phone,
         password: hashed,
         role: userRole,
+        aadhaarNumber: aadhaar || undefined,
+        phoneVerified: true, // OTP was verified above
+        aadhaarVerified: true, // Aadhaar validated via Verhough checksum at registration
+        termsAcceptedAt: new Date(), // T&C accepted inline during registration
+        termsVersion: '1.0',
+        privacyConsentAt: new Date(),
+        privacyConsentVersion: '1.0',
         vehicleType: userRole === 'driver' ? vehicleType || 'Toto (E-Rickshaw)' : undefined,
         vehicleNumber: userRole === 'driver' ? vehicleNumber || '' : undefined,
         driverStatus: userRole === 'driver' ? 'pending' : undefined,
@@ -177,10 +207,6 @@ export default function authRoutes() {
           });
         }
       }
-      // Admins must solve a captcha before signing in.
-      if (user.role === 'admin' && !verifyCaptcha(captchaId, captchaAnswer)) {
-        return res.status(400).json({ message: 'Invalid or expired captcha. Please try again.' });
-      }
 
       const token = signToken(user);
       res.json({ token, user: user.toSafeJSON() });
@@ -292,6 +318,36 @@ export default function authRoutes() {
       user.termsVersion = String(version);
       await user.save();
       res.json({ message: 'Terms accepted', user: user.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Privacy consent (DPDP 2023) - any role can record/renew consent.
+  router.post('/consent', requireAuth, async (req, res) => {
+    try {
+      const { version } = req.body || {};
+      if (!version) return res.status(400).json({ message: 'Privacy policy version is required' });
+      const user = req.userDoc;
+      user.privacyConsentAt = new Date();
+      user.privacyConsentVersion = String(version);
+      await user.save();
+      res.json({ message: 'Privacy consent recorded', user: user.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Motor Vehicle Aggregator Agreement (MGAA) acceptance - drivers only.
+  router.post('/accept-agreement', requireAuth, requireRole('driver'), async (req, res) => {
+    try {
+      const { version } = req.body || {};
+      if (!version) return res.status(400).json({ message: 'Agreement version is required' });
+      const user = req.userDoc;
+      user.aggregatorAgreementAcceptedAt = new Date();
+      user.aggregatorAgreementVersion = String(version);
+      await user.save();
+      res.json({ message: 'Aggregator agreement accepted', user: user.toSafeJSON() });
     } catch (err) {
       next(err);
     }

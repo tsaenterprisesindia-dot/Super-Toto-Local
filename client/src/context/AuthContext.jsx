@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import i18n from '../i18n.js';
 import client from '../api/client.js';
 
 const AuthContext = createContext(null);
@@ -31,6 +32,18 @@ export function AuthProvider({ children }) {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      try {
+        const saved = localStorage.getItem('btl_lang') || 'en';
+        if (!localStorage.getItem('btl_lang_saved')) localStorage.setItem('btl_lang_saved', saved);
+      } catch {
+        /* ignore */
+      }
+      if (i18n.language !== 'en') i18n.changeLanguage('en');
+    }
+  }, [user]);
 
   const persist = useCallback((data) => {
     localStorage.setItem('btl_token', data.token);
@@ -80,6 +93,18 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(() => {
+    try {
+      const saved = localStorage.getItem('btl_lang_saved');
+      localStorage.removeItem('btl_lang_saved');
+      if (saved) {
+        localStorage.setItem('btl_lang', saved);
+        if (i18n.language !== saved) i18n.changeLanguage(saved);
+      } else if (i18n.language !== 'en') {
+        i18n.changeLanguage('en');
+      }
+    } catch {
+      /* ignore */
+    }
     localStorage.removeItem('btl_token');
     localStorage.removeItem('btl_user');
     setUser(null);

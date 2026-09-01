@@ -60,17 +60,25 @@ export function timeAgo(d) {
 }
 
 export const DESTINATIONS = [
-  { name: 'M.G. Marg', lat: 27.3358, lng: 88.614 },
-  { name: 'Zero Point (Tashi View Point)', lat: 27.3653, lng: 88.6118 },
-  { name: 'Paljor Stadium', lat: 27.3381, lng: 88.6146 },
-  { name: 'Deorali', lat: 27.3231, lng: 88.6177 },
-  { name: 'Tadong', lat: 27.3144, lng: 88.6128 },
-  { name: 'Tibet Road', lat: 27.3338, lng: 88.615 },
-  { name: 'SNT Bus Stand', lat: 27.3314, lng: 88.6193 },
-  { name: 'Ranka / Baluwakhani', lat: 27.3229, lng: 88.6265 },
+  { name: 'Katihar Railway Station', lat: 25.5415, lng: 87.5763 },
+  { name: 'Mahavir Colony', lat: 25.5448, lng: 87.5587 },
+  { name: 'Kumaripara', lat: 25.5388, lng: 87.5712 },
+  { name: 'Bhawanipur', lat: 25.5518, lng: 87.5633 },
+  { name: 'Tilak Jyanti Nagar', lat: 25.5298, lng: 87.5641 },
+  { name: 'Kadaghat', lat: 25.5333, lng: 87.5812 },
+  { name: 'Barari Bazaar', lat: 25.5472, lng: 87.5705 },
+  { name: 'Kurji', lat: 25.5568, lng: 87.5778 },
+  { name: 'Azimabad', lat: 25.5212, lng: 87.5598 },
+  { name: 'Sonbarsa', lat: 25.5602, lng: 87.5642 },
+  { name: 'Manihari', lat: 25.3396, lng: 87.6147 },
+  { name: 'Korha', lat: 25.4443, lng: 87.4868 },
+  { name: 'Balrampur', lat: 25.6103, lng: 87.6492 },
+  { name: 'Dandkhora', lat: 25.4782, lng: 87.5374 },
+  { name: 'Hasanganj', lat: 25.5802, lng: 87.5298 },
 ];
 
 export const STATUS_LABELS = {
+  reserved: 'Reserved (not dispatched)',
   requested: 'Searching for a toto',
   assigned: 'Driver assigned',
   driver_arrived: 'Driver arrived at pickup',

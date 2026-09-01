@@ -1,19 +1,36 @@
 import bcrypt from 'bcryptjs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-// In-memory OTP store. OTPs are hashed, single-use, expire after OTP_TTL_MS,
-// and are limited to MAX_ATTEMPTS tries. There is no SMS gateway in this demo
-// app, so the code is returned to the client as a "demo SMS" (mirrors the
-// forgot-password demo code). Swap the response with a real SMS provider call
-// in production.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PERSIST_FILE = join(__dirname, '..', '.otp-store.json');
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const MAX_STORED = 300;
-const store = new Map(); // `${purpose}:${phone}` -> { hash, expiresAt, attempts }
+
+// Load persisted store from disk (survives server restarts).
+let store = new Map();
+if (existsSync(PERSIST_FILE)) {
+  try {
+    const raw = JSON.parse(readFileSync(PERSIST_FILE, 'utf8'));
+    for (const [k, v] of Object.entries(raw)) {
+      if (v.expiresAt > Date.now()) store.set(k, v);
+    }
+  } catch { /* start fresh */ }
+}
+
+function persist() {
+  try {
+    const obj = {};
+    for (const [k, v] of store) obj[k] = v;
+    writeFileSync(PERSIST_FILE, JSON.stringify(obj));
+  } catch { /* ignore write errors */ }
+}
 
 const keyFor = (phone, purpose) => `${purpose}:${phone}`;
 
-// Generates a 6-digit OTP and returns the plaintext code (the demo SMS body).
 export async function createOtp(phone, purpose) {
   const code = String(Math.floor(100000 + Math.random() * 900000));
   const key = keyFor(phone, purpose);
@@ -28,11 +45,10 @@ export async function createOtp(phone, purpose) {
     if (oldest) store.delete(oldest);
   }
 
+  persist();
   return code;
 }
 
-// Verifies and consumes an OTP. Returns true only for a correct, unexpired,
-// within-attempt-limit code.
 export async function verifyOtp(phone, purpose, code) {
   if (!phone || code === undefined || code === null) return false;
   const key = keyFor(phone, purpose);
@@ -41,15 +57,18 @@ export async function verifyOtp(phone, purpose, code) {
 
   if (Date.now() > entry.expiresAt) {
     store.delete(key);
+    persist();
     return false;
   }
   if (entry.attempts >= MAX_ATTEMPTS) {
     store.delete(key);
+    persist();
     return false;
   }
   entry.attempts += 1;
 
   const ok = await bcrypt.compare(String(code).trim(), entry.hash);
-  if (ok) store.delete(key); // single-use
+  if (ok) store.delete(key);
+  persist();
   return ok;
 }

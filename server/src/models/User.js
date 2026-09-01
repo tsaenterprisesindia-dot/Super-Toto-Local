@@ -29,11 +29,35 @@ const userSchema = new mongoose.Schema(
     // Driver profile
     vehicleType: { type: String, default: 'Toto (E-Rickshaw)' },
     vehicleNumber: { type: String, default: '' },
+    vehicleDetails: {
+      brand: { type: String, default: '' },
+      model: { type: String, default: '' },
+      year: { type: Number, default: 0 },
+      color: { type: String, default: '' },
+      seats: { type: Number, default: 4 },
+      luggageCapacityKg: { type: Number, default: 10 },
+      hasStep: { type: Boolean, default: true },
+      hasCanopy: { type: Boolean, default: true },
+      hasStorage: { type: Boolean, default: false },
+      fuelType: { type: String, default: 'Electric' },
+      insuranceUpto: { type: String, default: '' },
+      permitUpto: { type: String, default: '' },
+      // Bike-specific fields
+      engineCc: { type: Number, default: 0 },
+      hasPillionSeat: { type: Boolean, default: true },
+      helmetCount: { type: Number, default: 2 },
+      hasTopBox: { type: Boolean, default: false },
+    },
     driverStatus: {
       type: String,
       enum: ['pending', 'approved', 'blocked'],
       default: 'pending',
     },
+
+    // Rider identity verification
+    aadhaarNumber: { type: String, default: '' },
+    phoneVerified: { type: Boolean, default: false },
+    aadhaarVerified: { type: Boolean, default: false },
     isOnline: { type: Boolean, default: false },
     // Hidden accounts are deactivated by an admin: they cannot log in, are
     // excluded from ride dispatch and surge counts, but remain in the admin
@@ -53,6 +77,17 @@ const userSchema = new mongoose.Schema(
     termsAcceptedAt: { type: Date, default: null },
     termsVersion: { type: String, default: '' },
 
+    // Privacy consent (DPDP 2023)
+    privacyConsentAt: { type: Date, default: null },
+    privacyConsentVersion: { type: String, default: '' },
+
+    // Motor Vehicle Aggregator Agreement (MGAA) acceptance for drivers
+    aggregatorAgreementAcceptedAt: { type: Date, default: null },
+    aggregatorAgreementVersion: { type: String, default: '' },
+
+    // Driver training acknowledgement
+    trainingAcknowledgedAt: { type: Date, default: null },
+
     // Warnings issued by admin (visible to the user as in-app banners)
     warnings: [
       {
@@ -70,6 +105,28 @@ const userSchema = new mongoose.Schema(
       issuedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       issuedAt: { type: Date, default: null },
     },
+
+    // Driver documents (uploaded for verification)
+    documents: [
+      {
+        type: {
+          type: String,
+          enum: ['aadhaar', 'rc', 'license', 'bank', 'photo', 'insurance', 'puc', 'pcc'],
+          required: true,
+        },
+        filename: { type: String, required: true },
+        originalName: { type: String, default: '' },
+        status: {
+          type: String,
+          enum: ['pending', 'approved', 'rejected'],
+          default: 'pending',
+        },
+        rejectionReason: { type: String, default: '' },
+        uploadedAt: { type: Date, default: Date.now },
+        reviewedAt: { type: Date, default: null },
+        reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      },
+    ],
   },
   { timestamps: true }
 );

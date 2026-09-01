@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import client from '../api/client.js';
 import PasswordInput from '../components/PasswordInput.jsx';
@@ -8,13 +9,20 @@ import OtpTimer from '../components/OtpTimer.jsx';
 import logo from '../assets/super-toto-logo.png';
 
 const ROLES = [
-  { key: 'rider', label: 'Rider' },
-  { key: 'driver', label: 'Driver' },
-  { key: 'admin', label: 'Admin' },
+  { key: 'rider' },
+  { key: 'driver' },
+  { key: 'admin' },
 ];
+
+const ROLE_T = {
+  rider: 'login.roleRider',
+  driver: 'login.roleDriver',
+  admin: 'login.roleAdmin',
+};
 
 export default function Login() {
   const { login, otpLogin, sendOtp } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const [mode, setMode] = useState('password'); // password | otp
@@ -26,20 +34,9 @@ export default function Login() {
   const [demoOtp, setDemoOtp] = useState('');
   const [expiresAt, setExpiresAt] = useState(0);
   const [expired, setExpired] = useState(false);
-  const [captcha, setCaptcha] = useState(null); // { captchaId, question }
-  const [captchaAnswer, setCaptchaAnswer] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [otpBusy, setOtpBusy] = useState(false);
-
-  const loadCaptcha = useCallback(() => {
-    setCaptchaAnswer('');
-    client.get('/auth/captcha').then(({ data }) => setCaptcha(data)).catch(() => setCaptcha(null));
-  }, []);
-
-  useEffect(() => {
-    if (mode === 'password' && role === 'admin') loadCaptcha();
-  }, [mode, role, loadCaptcha]);
 
   const quick = (mail) => {
     setEmail(mail);
@@ -58,12 +55,10 @@ export default function Login() {
     setBusy(true);
     setError('');
     try {
-      const extra = role === 'admin' ? { captchaId: captcha?.captchaId, captchaAnswer } : {};
-      const { user } = await login(email, password, extra);
+      const { user } = await login(email, password);
       goHome(user);
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
-      if (role === 'admin') loadCaptcha();
+      setError(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? t('login.errNetwork') : t('login.errLogin')));
     } finally {
       setBusy(false);
     }
@@ -80,7 +75,7 @@ export default function Login() {
       setExpiresAt(Date.now() + (data.expiresInMinutes || 5) * 60 * 1000);
       setExpired(false);
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not send OTP');
+      setError(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? t('login.errNetwork') : t('login.errOtp')));
     } finally {
       setOtpBusy(false);
     }
@@ -94,7 +89,7 @@ export default function Login() {
       const { user } = await otpLogin(otpPhone, otp);
       goHome(user);
     } catch (err) {
-      setError(err.response?.data?.message || 'OTP login failed');
+      setError(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? t('login.errNetwork') : t('login.errOtpLogin')));
       setOtp('');
     } finally {
       setBusy(false);
@@ -105,18 +100,18 @@ export default function Login() {
     <div className="auth-page">
       <div className="card auth-card fade-in">
         <div className="auth-title">
-          <img src={logo} alt="Super Toto Local logo" className="auth-logo" /> Super Toto Local
+          <img src={logo} alt="Super Toto Local logo" className="auth-logo" /> {t('common.appName')}
         </div>
-        <p className="muted">Log in to continue</p>
+        <p className="muted">{t('login.title')}</p>
 
         {error && <div className="err-box">{error}</div>}
 
         <div className="seg-row mb">
           <button type="button" className={`seg${mode === 'password' ? ' active' : ''}`} onClick={() => setMode('password')}>
-            Password
+            {t('login.tabPassword')}
           </button>
           <button type="button" className={`seg${mode === 'otp' ? ' active' : ''}`} onClick={() => setMode('otp')}>
-            Mobile OTP
+            {t('login.tabOtp')}
           </button>
         </div>
 
@@ -128,7 +123,7 @@ export default function Login() {
               className={`seg${role === r.key ? ' active' : ''}`}
               onClick={() => pickRole(r.key)}
             >
-              {r.label}
+              {t(ROLE_T[r.key])}
             </button>
           ))}
         </div>
@@ -136,47 +131,22 @@ export default function Login() {
         {mode === 'password' ? (
           <form onSubmit={submitPassword}>
             <div className="field">
-              <label>Email or mobile</label>
-              <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com or +91 9xxxx xxxxx" />
+              <label>{t('login.emailLabel')}</label>
+              <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('login.emailPlaceholder')} />
             </div>
             <div className="field">
-              <label>Password</label>
+              <label>{t('login.passwordLabel')}</label>
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
             </div>
 
-            {role === 'admin' && (
-              <div className="field captcha-box">
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <label style={{ marginBottom: 0 }}>Security check</label>
-                  <button type="button" className="btn btn-ghost small" onClick={loadCaptcha}>↻ New</button>
-                </div>
-                {captcha ? (
-                  <>
-                    <div className="captcha-q">{captcha.question}</div>
-                    <input
-                      className="input"
-                      value={captchaAnswer}
-                      onChange={(e) => setCaptchaAnswer(e.target.value)}
-                      placeholder="Your answer"
-                      inputMode="numeric"
-                      autoComplete="off"
-                    />
-                  </>
-                ) : (
-                  <div className="small muted">Loading security check…</div>
-                )}
-                <div className="small muted">Admins always sign in with password + this security check.</div>
-              </div>
-            )}
-
             <button className="btn btn-primary btn-block btn-lg" disabled={busy}>
-              {busy ? 'Logging in…' : 'Log in'}
+              {busy ? t('login.loggingIn') : t('login.submit')}
             </button>
           </form>
         ) : (
           <form onSubmit={submitOtp}>
             <div className="field">
-              <label>Mobile number</label>
+              <label>{t('login.mobileLabel')}</label>
               <div className="row">
                 <input
                   className="input"
@@ -188,67 +158,64 @@ export default function Login() {
                     setDemoOtp('');
                     setOtp('');
                   }}
-                  placeholder="+91 9xxxx xxxxx"
+                  placeholder={t('login.mobilePlaceholder')}
                   inputMode="tel"
                 />
                 <button type="button" className="btn btn-ghost" onClick={requestOtp} disabled={otpBusy || !otpPhone}>
-                  {otpBusy ? 'Sending…' : otpPhone && (expiresAt || demoOtp) ? 'Resend' : 'Send OTP'}
+                  {otpBusy ? t('login.sending') : otpPhone && (expiresAt || demoOtp) ? t('login.resend') : t('login.sendOtp')}
                 </button>
               </div>
             </div>
 
             {demoOtp && (
               <div className="alert alert-info mb">
-                <b>Demo SMS:</b> your OTP is <b>{demoOtp}</b>. In production this would be sent to your phone.
+                <b>{t('login.demoSmsLabel')}:</b> {t('login.demoSmsBody', { otp: demoOtp })}
               </div>
             )}
 
             {expiresAt > 0 && (
-              <div className="field">
+              <div className="field otp-container otp-active">
                 <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <label style={{ marginBottom: 0 }}>One-time password</label>
-                  {expired ? <span className="otp-expired">OTP expired</span> : <OtpTimer expiresAt={expiresAt} onExpire={() => setExpired(true)} />}
+                  <label style={{ marginBottom: 0 }}>{t('login.otpLabel')}</label>
+                  {expired ? <span className="otp-expired">{t('login.otpExpired')}</span> : <OtpTimer expiresAt={expiresAt} onExpire={() => setExpired(true)} />}
                 </div>
                 <OtpInput value={otp} onChange={setOtp} length={6} disabled={expired} />
-                {expired && <div className="small muted mt">The OTP has expired. Tap Resend to get a new code.</div>}
+                {expired && <div className="small muted mt">{t('login.otpExpiredHint')}</div>}
               </div>
             )}
 
             {role === 'admin' ? (
-              <div className="alert alert-warn mb">Admins can't use OTP login — sign in with password and the security check.</div>
+              <div className="alert alert-warn mb">{t('login.adminOtpBlocked')}</div>
             ) : (
               <button className="btn btn-primary btn-block btn-lg" disabled={busy || !otp || expired || otp.length < 6}>
-                {busy ? 'Verifying…' : 'Log in with OTP'}
+                {busy ? t('login.verifying') : t('login.loginWithOtp')}
               </button>
             )}
           </form>
         )}
 
         <div className="small mt" style={{ textAlign: 'center' }}>
-          <Link to="/face-login">Log in with Face Recognition</Link>
+          <Link to="/face-login">{t('login.faceLogin')}</Link>
         </div>
 
         <div className="small muted mt" style={{ textAlign: 'center' }}>
-          <Link to="/forgot-password">Forgot password?</Link>
+          <Link to="/forgot-password">{t('login.forgot')}</Link>
         </div>
 
         <div className="small muted mt" style={{ textAlign: 'center' }}>
-          No account? <Link to="/register">Create one</Link>
+          {t('login.noAccount')} <Link to="/register">{t('login.createOne')}</Link>
         </div>
 
         <div className="card mt" style={{ background: 'var(--bg)', boxShadow: 'none' }}>
           <div className="small muted mb" style={{ fontWeight: 700 }}>
-            Demo accounts (password: demo123)
+            {t('login.demoTitle')}
           </div>
           <div className="row">
-            <button className="btn btn-ghost small" onClick={() => { pickRole('rider'); quick('rider@supertoto.local'); }}>Rider</button>
-            <button className="btn btn-ghost small" onClick={() => { pickRole('driver'); quick('driver@supertoto.local'); }}>Driver</button>
-            <button className="btn btn-ghost small" onClick={() => { pickRole('admin'); quick('admin@supertoto.local'); }}>Admin</button>
+            <button className="btn btn-ghost small" onClick={() => { pickRole('rider'); quick('rider@supertoto.local'); }}>{t('login.roleRider')}</button>
+            <button className="btn btn-ghost small" onClick={() => { pickRole('driver'); quick('driver@supertoto.local'); }}>{t('login.roleDriver')}</button>
+            <button className="btn btn-ghost small" onClick={() => { pickRole('admin'); quick('admin@supertoto.local'); }}>{t('login.roleAdmin')}</button>
           </div>
-          <div className="small muted mt">
-            OTP login demo: <b>90000 00002</b> (rider) · <b>90000 00003</b> (driver)
-          </div>
-          <div className="small muted mt">Admin sign-in includes a security check (captcha).</div>
+          <div className="small muted mt">{t('login.otpDemo')}</div>
         </div>
       </div>
     </div>

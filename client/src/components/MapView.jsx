@@ -50,11 +50,11 @@ function FitBounds({ bounds }) {
 }
 
 export default function MapView({ center, pickup, drop, driverPos, onMapClick, bounds, className }) {
-  const safeCenter = center || { lat: 27.3358, lng: 88.614 };
+  const safeCenter = center || { lat: 25.5348, lng: 87.5734 };
   return (
     <MapContainer
       center={[safeCenter.lat, safeCenter.lng]}
-      zoom={14}
+      zoom={13}
       className={className || 'map-fill'}
     >
       <TileLayer

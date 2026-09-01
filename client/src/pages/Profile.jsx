@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Nav from '../components/Nav.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useFace } from '../context/FaceProvider.jsx';
@@ -17,6 +17,8 @@ export default function Profile() {
   const [enrollBusy, setEnrollBusy] = useState(false);
   const [err, setErr] = useState('');
   const [termsMsg, setTermsMsg] = useState('');
+  const [trainBusy, setTrainBusy] = useState(false);
+  const [trainMsg, setTrainMsg] = useState('');
 
   const doLogout = () => {
     logout();
@@ -56,6 +58,20 @@ export default function Profile() {
       setTermsMsg('Terms re-accepted successfully');
     } catch (e) {
       setErr(e.response?.data?.message || 'Failed to save');
+    }
+  };
+
+  const ackTraining = async () => {
+    setTrainMsg(''); setErr('');
+    setTrainBusy(true);
+    try {
+      await client.post('/driver/training-ack');
+      await refreshUser();
+      setTrainMsg('Training acknowledged ✓');
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Could not acknowledge training');
+    } finally {
+      setTrainBusy(false);
     }
   };
 
@@ -158,6 +174,40 @@ export default function Profile() {
           )}
           {termsMsg && <div className="alert alert-green mt">{termsMsg}</div>}
           {err && <div className="err-box mt">{err}</div>}
+
+          {(user?.role === 'rider' || user?.role === 'driver') && (
+            <div className="mt" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <h4 style={{ margin: '0 0 8px' }}>Compliance & data</h4>
+              <div className="spread">
+                <span className="muted">Privacy consent</span>
+                <b>{user?.privacyConsentAt ? `Given (v${user.privacyConsentVersion || '1.0'}) on ${new Date(user.privacyConsentAt).toLocaleDateString('en-IN')}` : 'Not given'}</b>
+              </div>
+              <div className="small muted mt" style={{ marginBottom: 8 }}>
+                Manage your data and consent — <Link to="/legal/privacy">Privacy Policy</Link>.
+              </div>
+              {user?.role === 'driver' && (
+                <>
+                  <div className="spread">
+                    <span className="muted">Aggregator Agreement</span>
+                    <b>{user?.aggregatorAgreementAcceptedAt ? `Signed (v${user.aggregatorAgreementVersion || '1.0'}) ✓` : 'Not signed'}</b>
+                  </div>
+                  <div className="spread" style={{ marginTop: 4 }}>
+                    <span className="muted">Safety training</span>
+                    <b>{user?.trainingAcknowledgedAt ? 'Acknowledged ✓' : 'Pending'}</b>
+                  </div>
+                  {!user?.aggregatorAgreementAcceptedAt && (
+                    <Link to="/legal/aggregator-agreement" className="btn btn-primary btn-block mt">Sign Aggregator Agreement</Link>
+                  )}
+                  {user?.aggregatorAgreementAcceptedAt && !user?.trainingAcknowledgedAt && (
+                    <button className="btn btn-ghost btn-block mt" onClick={ackTraining} disabled={trainBusy} type="button">
+                      {trainBusy ? 'Saving…' : 'Acknowledge safety training'}
+                    </button>
+                  )}
+                  {trainMsg && <div className="alert alert-green mt">{trainMsg}</div>}
+                </>
+              )}
+            </div>
+          )}
 
           <button className="btn btn-ghost btn-block mt" onClick={doLogout}>Log out</button>
         </div>

@@ -1,8 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useFace } from '../context/FaceProvider.jsx';
-import FaceCapture from '../components/FaceCapture.jsx';
 import client from '../api/client.js';
 import logo from '../assets/super-toto-logo.png';
 
@@ -176,7 +174,9 @@ Nothing in these Terms excludes liability for death, personal injury, or fraud c
 
 TSA Enterprises India
 Email: support@supertoto.local
-Phone: +91 90000 00001
+Email: tsaenterprisesindia@gmail.com
+Phone: +91 9811997286
+WhatsApp: +91 9811997286 (chat with us directly)
 App: Use the in-app Help & Support section.
 
 We aim to respond to all queries within 48 business hours.`,
@@ -184,16 +184,12 @@ We aim to respond to all queries within 48 business hours.`,
 ];
 
 export default function RiderTerms() {
-  const { user } = useAuth();
-  const { setFaceDescriptors } = useFace();
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
-  const [faceOpen, setFaceOpen] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const boxRef = useRef(null);
-
-  const needsFace = user && user.role !== 'admin' && !user.faceRegistered;
 
   const handleScroll = (e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -205,8 +201,8 @@ export default function RiderTerms() {
     setErr('');
     try {
       await client.post('/auth/accept-terms', { version: TERMS_VERSION });
-      if (needsFace) setFaceOpen(true);
-      else navigate('/ride');
+      await refreshUser();
+      navigate('/ride');
     } catch (e) {
       setErr(e.response?.data?.message || 'Could not save acceptance. Please try again.');
     } finally {
@@ -215,45 +211,39 @@ export default function RiderTerms() {
   };
 
   return (
-    <div className="auth-wrap">
-      {faceOpen && (
-        <FaceCapture
-          onSaved={() => navigate('/ride')}
-          onSkip={() => navigate('/ride')}
-          onCancel={() => setFaceOpen(false)}
-        />
-      )}
-      <div className="auth-card terms-card">
-        <img src={logo} alt="Super Toto Local" className="auth-logo" />
+    <div className="terms-page">
+      <div className="terms-header">
+        <img src={logo} alt="Super Toto Local" className="terms-logo" />
         <h2>Terms &amp; Conditions — Rider</h2>
-        <p className="small muted mb">Please read carefully. Scroll to the bottom to accept. (v{TERMS_VERSION})</p>
+        <p className="small muted">Please read carefully. Scroll to the bottom to accept. (v{TERMS_VERSION})</p>
+      </div>
 
-        {err && <div className="alert alert-warn mb">{err}</div>}
+      {err && <div className="alert alert-warn" style={{ margin: '0 16px' }}>{err}</div>}
 
-        <div className="terms-box" ref={boxRef} onScroll={handleScroll}>
-          {sections.map((s, i) => (
-            <section key={i}>
-              <h4 className="terms-heading">{s.title}</h4>
-              {s.body.split('\n').map((line, j) => (
-                <p key={j}>{line}</p>
-              ))}
-            </section>
-          ))}
-        </div>
+      <div className="terms-body" ref={boxRef} onScroll={handleScroll}>
+        {sections.map((s, i) => (
+          <section key={i}>
+            <h4 className="terms-heading">{s.title}</h4>
+            {s.body.split('\n').map((line, j) => (
+              <p key={j}>{line}</p>
+            ))}
+          </section>
+        ))}
+      </div>
 
-        <button
-          className="btn btn-primary mt"
-          disabled={busy || !accepted}
-          onClick={acceptTerms}
-          style={{ width: '100%' }}
-        >
-          {busy ? 'Saving…' : 'I have read and accept the Terms'}
-        </button>
+      <div className="terms-footer">
         {!accepted && (
-          <p className="small muted mt" style={{ textAlign: 'center' }}>
+          <p className="small muted" style={{ textAlign: 'center', margin: '0 0 8px' }}>
             Scroll to the bottom to enable the accept button.
           </p>
         )}
+        <button
+          className="btn btn-primary"
+          disabled={busy || !accepted}
+          onClick={acceptTerms}
+        >
+          {busy ? 'Saving…' : 'I have read and accept the Terms'}
+        </button>
       </div>
     </div>
   );

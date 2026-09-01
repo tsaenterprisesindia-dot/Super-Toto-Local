@@ -5,6 +5,7 @@ import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { SocketProvider } from './context/SocketContext.jsx';
 import { FaceProvider } from './context/FaceProvider.jsx';
+import './i18n.js';
 import './index.css';
 
 if ('serviceWorker' in navigator) {

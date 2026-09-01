@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import client from '../../api/client.js';
+import { apiBase } from '../../api/config.js';
 import Modal from '../../components/Modal.jsx';
 import { timeAgo } from '../../utils/geo.js';
 
@@ -25,10 +26,52 @@ export default function AdminRiders() {
   const [settlementConfirmed, setSettlementConfirmed] = useState(false);
   const [viewWarnTarget, setViewWarnTarget] = useState(null);
 
+  // document review
+  const [docTarget, setDocTarget] = useState(null);
+  const [docList, setDocList] = useState([]);
+  const [docInfo, setDocInfo] = useState(null);
+  const [docBusy, setDocBusy] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectDocId, setRejectDocId] = useState(null);
+
   const load = useCallback(() => {
     client.get('/admin/riders').then(({ data }) => setRiders(data.riders)).catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const openDocs = async (rider) => {
+    setDocTarget(rider);
+    setDocList([]);
+    setDocInfo(null);
+    setDocBusy(true);
+    try {
+      const { data } = await client.get(`/admin/riders/${rider._id}/documents`);
+      setDocList(data.documents || []);
+      setDocInfo(data.rider || null);
+    } catch {
+      setDocList([]);
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const reviewDoc = async (docId, action, reason) => {
+    if (!docTarget) return;
+    setDocBusy(true);
+    try {
+      await client.patch(`/admin/riders/${docTarget._id}/documents/${docId}`, { action, rejectionReason: reason });
+      const { data } = await client.get(`/admin/riders/${docTarget._id}/documents`);
+      setDocList(data.documents || []);
+      setDocInfo(data.rider || null);
+      load();
+    } catch (e) {
+      setMsg(e.response?.data?.message || 'Failed');
+    } finally {
+      setDocBusy(false);
+      setRejectDocId(null);
+      setRejectReason('');
+    }
+  };
 
   // Fetch financial summary when the suspend modal opens.
   useEffect(() => {
@@ -127,6 +170,7 @@ export default function AdminRiders() {
               <th>Name</th>
               <th>Phone</th>
               <th>Joined</th>
+              <th>Docs</th>
               <th>Status</th>
               <th>Warnings</th>
               <th>Actions</th>
@@ -141,6 +185,15 @@ export default function AdminRiders() {
                 </td>
                 <td>{r.phone || '—'}</td>
                 <td className="small">{timeAgo(r.createdAt)}</td>
+                <td>
+                  {r.documents && r.documents.length > 0 ? (
+                    <button className="badge badge-blue btn-ghost" style={{ cursor: 'pointer', border: 'none' }} onClick={() => openDocs(r)}>
+                      {r.documents.length} doc{r.documents.length > 1 ? 's' : ''}
+                    </button>
+                  ) : (
+                    <span className="muted small">No docs</span>
+                  )}
+                </td>
                 <td>
                   {r.isHidden ? <span className="badge badge-gray">hidden</span> : suspended(r)
                     ? <span className="badge badge-suspended">{suspendedUntil(r) ? `susp. till ${suspendedUntil(r)}` : 'permanently suspended'}</span>
@@ -171,7 +224,7 @@ export default function AdminRiders() {
               </tr>
             ))}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="muted center">No riders in this view.</td></tr>
+              <tr><td colSpan={7} className="muted center">No riders in this view.</td></tr>
             )}
           </tbody>
         </table>
@@ -263,6 +316,66 @@ export default function AdminRiders() {
         )}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={() => setViewWarnTarget(null)}>Close</button>
+        </div>
+      </Modal>
+
+      {/* --- Document review modal --- */}
+      <Modal open={!!docTarget} onClose={() => { setDocTarget(null); setRejectDocId(null); setRejectReason(''); }}>
+        <h3>Documents — {docTarget?.name}</h3>
+        {docInfo && (
+          <div className="card" style={{ background: 'var(--bg)', padding: 10, marginBottom: 10 }}>
+            <div className="spread mb"><span className="muted small">Aadhaar Number</span><b style={{ fontSize: 13 }}>{docInfo.aadhaarNumber ? `${docInfo.aadhaarNumber.slice(0,4)} ${docInfo.aadhaarNumber.slice(4,8)} ${docInfo.aadhaarNumber.slice(8)}` : '—'}</b></div>
+            <div className="spread mb"><span className="muted small">Mobile Verified</span><span className={`badge ${docInfo.phoneVerified ? 'badge-green' : 'badge-amber'}`}>{docInfo.phoneVerified ? 'Yes' : 'No'}</span></div>
+            <div className="spread"><span className="muted small">Aadhaar Verified</span><span className={`badge ${docInfo.aadhaarVerified ? 'badge-green' : 'badge-amber'}`}>{docInfo.aadhaarVerified ? 'Yes' : 'No'}</span></div>
+          </div>
+        )}
+        {docBusy && <p className="muted">Loading documents…</p>}
+        {!docBusy && docList.length === 0 && <p className="muted">No documents uploaded yet.</p>}
+        {!docBusy && docList.map((doc) => {
+          const DOC_LABELS = { aadhaar: 'Aadhaar Card (PDF)' };
+          const STATUS_CONFIG = { pending: { label: 'Under Review', cls: 'badge-amber' }, approved: { label: 'Approved', cls: 'badge-green' }, rejected: { label: 'Rejected', cls: 'badge-red' } };
+          const st = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pending;
+          const baseUrl = apiBase();
+          return (
+            <div key={doc._id} className="card" style={{ background: 'var(--bg)', padding: 12, marginBottom: 10 }}>
+              <div className="spread" style={{ marginBottom: 6 }}>
+                <b style={{ fontSize: 13 }}>{DOC_LABELS[doc.type] || doc.type}</b>
+                <span className={`badge ${st.cls}`}>{st.label}</span>
+              </div>
+              <div className="small muted" style={{ marginBottom: 6 }}>
+                {doc.originalName || doc.filename} — uploaded {new Date(doc.uploadedAt).toLocaleDateString('en-IN')}
+              </div>
+              {doc.status === 'rejected' && doc.rejectionReason && (
+                <div className="err-box mb" style={{ fontSize: 12 }}>Reason: {doc.rejectionReason}</div>
+              )}
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                <a href={`${baseUrl}/uploads/${doc.filename}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost small">
+                  View ↗
+                </a>
+                {doc.status !== 'approved' && (
+                  <button className="btn btn-primary small" disabled={docBusy} onClick={() => reviewDoc(doc._id, 'approve')}>
+                    Approve
+                  </button>
+                )}
+                {doc.status !== 'rejected' && (
+                  rejectDocId === doc._id ? (
+                    <div className="row" style={{ gap: 4, flex: 1 }}>
+                      <input className="input" style={{ flex: 1, fontSize: 12, padding: '6px 8px' }} placeholder="Rejection reason…" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+                      <button className="btn btn-danger small" disabled={docBusy} onClick={() => reviewDoc(doc._id, 'reject', rejectReason)}>Confirm</button>
+                      <button className="btn btn-ghost small" onClick={() => { setRejectDocId(null); setRejectReason(''); }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn-danger small" disabled={docBusy} onClick={() => setRejectDocId(doc._id)}>
+                      Reject
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={() => { setDocTarget(null); setRejectDocId(null); setRejectReason(''); }}>Close</button>
         </div>
       </Modal>
     </div>

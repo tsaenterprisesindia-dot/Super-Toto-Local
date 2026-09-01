@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import client from '../../api/client.js';
+import { apiBase } from '../../api/config.js';
 import { formatINR } from '../../utils/geo.js';
 
 export default function AdminOverview() {
@@ -13,10 +14,17 @@ export default function AdminOverview() {
 
   return (
     <div className="fade-in">
-      <h2 style={{ marginTop: 0 }}>📊 Overview</h2>
-      <p className="muted" style={{ marginTop: -8 }}>
-        Platform activity at a glance. Admin-only area — riders and drivers can never reach it.
-      </p>
+      <div className="spread" style={{ alignItems: 'flex-start' }}>
+        <div>
+          <h2 style={{ marginTop: 0 }}>📊 Overview</h2>
+          <p className="muted" style={{ marginTop: -8 }}>
+            Platform activity at a glance. Admin-only area — riders and drivers can never reach it.
+          </p>
+        </div>
+        <a href={`${apiBase()}/admin/export/users`} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}>
+          📥 Export Users (CSV)
+        </a>
+      </div>
 
       <h3 style={{ margin: '0 0 12px' }}>Users &amp; rides</h3>
       <div className="stats-grid mb">

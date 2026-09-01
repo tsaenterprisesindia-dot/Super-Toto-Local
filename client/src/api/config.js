@@ -1,4 +1,4 @@
-const NATIVE_API = 'http://10.201.57.168:5000';
+const NATIVE_API = 'http://127.0.0.1:5000';
 
 function isNative() {
   return typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.() === true;

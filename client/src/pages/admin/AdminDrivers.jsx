@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import client from '../../api/client.js';
+import { apiBase } from '../../api/config.js';
 import Modal from '../../components/Modal.jsx';
+import { formatAadhaar } from '../../utils/aadhaar.js';
 
 const SUSPEND_DURATIONS = [
   { label: '7 days', ms: 7 * 86400000 },
@@ -29,10 +31,52 @@ export default function AdminDrivers() {
   // warnings viewer
   const [viewWarnTarget, setViewWarnTarget] = useState(null);
 
+  // document review
+  const [docTarget, setDocTarget] = useState(null);
+  const [docList, setDocList] = useState([]);
+  const [docBusy, setDocBusy] = useState(false);
+  const [rejectDocId, setRejectDocId] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [docDriverInfo, setDocDriverInfo] = useState(null);
+
   const load = useCallback(() => {
     client.get('/admin/drivers').then(({ data }) => setDrivers(data.drivers)).catch(() => {});
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const openDocs = async (driver) => {
+    setDocTarget(driver);
+    setDocList([]);
+    setDocDriverInfo(null);
+    setDocBusy(true);
+    try {
+      const { data } = await client.get(`/admin/drivers/${driver._id}/documents`);
+      setDocList(data.documents || []);
+      setDocDriverInfo(data.driver || null);
+    } catch {
+      setDocList([]);
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const reviewDoc = async (docId, action, reason) => {
+    if (!docTarget) return;
+    setDocBusy(true);
+    try {
+      await client.patch(`/admin/drivers/${docTarget._id}/documents/${docId}`, { action, rejectionReason: reason });
+      const { data } = await client.get(`/admin/drivers/${docTarget._id}/documents`);
+      setDocList(data.documents || []);
+      setDocDriverInfo(data.driver || null);
+      load();
+    } catch (e) {
+      setMsg(e.response?.data?.message || 'Failed');
+    } finally {
+      setDocBusy(false);
+      setRejectDocId(null);
+      setRejectReason('');
+    }
+  };
 
   // Fetch financial summary when the suspend modal opens.
   useEffect(() => {
@@ -107,6 +151,25 @@ export default function AdminDrivers() {
     : null;
   const warnCount = (d) => (d.warnings || []).length;
 
+  const docStatus = (d, type) => (d.documents || []).find((x) => x.type === type)?.status || null;
+
+  const docBadge = (d, type, label) => {
+    const st = docStatus(d, type);
+    const cls = st === 'approved' ? 'badge-green' : st === 'pending' ? 'badge-amber' : st === 'rejected' ? 'badge-red' : 'badge-gray';
+    return <span className={`badge ${cls}`} style={{ marginRight: 4, marginTop: 2 }}>{st === 'approved' ? `${label} ✓` : st ? `${label}: ${st}` : `${label}: —`}</span>;
+  };
+
+  const expiryBadge = (d, key, label) => {
+    const v = d.vehicleDetails?.[key];
+    if (!v) return null;
+    const dt = new Date(v);
+    if (isNaN(dt.getTime())) return null;
+    const days = Math.ceil((dt - Date.now()) / 86400000);
+    const cls = days < 0 ? 'badge-red' : days <= 30 ? 'badge-amber' : 'badge-green';
+    const txt = days < 0 ? `${label} expired` : `${label} ${dt.toLocaleDateString('en-IN')} (${days}d left)`;
+    return <span className={`badge ${cls}`} style={{ marginRight: 4, marginTop: 2 }}>{txt}</span>;
+  };
+
   const filtered = drivers.filter((d) => {
     if (filter === 'hidden') return d.isHidden;
     if (filter === 'active') return !d.isHidden && !suspended(d);
@@ -138,6 +201,7 @@ export default function AdminDrivers() {
               <th>Driver</th>
               <th>Vehicle</th>
               <th>Rides</th>
+              <th>Docs</th>
               <th>Status</th>
               <th>Warnings</th>
               <th>Actions</th>
@@ -152,8 +216,21 @@ export default function AdminDrivers() {
                     <b>{d.name}</b>
                     <div className="small muted">{d.email || d.phone}</div>
                   </td>
-                  <td>{d.vehicleType}<div className="small muted">{d.vehicleNumber || '—'}</div></td>
+                  <td>{d.vehicleType}<div className="small muted">{d.vehicleNumber || '—'}</div>
+                    <div className="row wrap" style={{ gap: 2 }}>{expiryBadge(d, 'insuranceUpto', 'Insurance')}{expiryBadge(d, 'permitUpto', 'Permit')}</div>
+                  </td>
                   <td>{d.rideCount || 0}</td>
+                  <td>
+                    {d.documents && d.documents.length > 0 ? (
+                      <button className="badge badge-blue btn-ghost" style={{ cursor: 'pointer', border: 'none' }} onClick={() => openDocs(d)}>
+                        {d.documents.length} doc{d.documents.length > 1 ? 's' : ''}
+                      </button>
+                    ) : (
+                      <span className="muted small">No docs</span>
+                    )}
+                    <div className="row wrap" style={{ gap: 2 }}>{docBadge(d, 'pcc', 'PCC')}</div>
+                    {d.aadhaarNumber && <div className="small muted" style={{ marginTop: 2 }}>Aadhaar: {formatAadhaar(d.aadhaarNumber)}</div>}
+                  </td>
                   <td>
                     <span className={`badge ${status === 'approved' ? 'badge-green' : status === 'pending' ? 'badge-amber' : 'badge-red'}`}>
                       {status}
@@ -198,7 +275,7 @@ export default function AdminDrivers() {
               );
             })}
             {filtered.length === 0 && (
-              <tr><td colSpan={6} className="muted center">No drivers in this view.</td></tr>
+              <tr><td colSpan={7} className="muted center">No drivers in this view.</td></tr>
             )}
           </tbody>
         </table>
@@ -314,6 +391,71 @@ export default function AdminDrivers() {
         )}
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={() => setViewWarnTarget(null)}>Close</button>
+        </div>
+      </Modal>
+
+      {/* --- Document review modal --- */}
+      <Modal open={!!docTarget} onClose={() => { setDocTarget(null); setRejectDocId(null); setRejectReason(''); }}>
+        <h3>Documents — {docTarget?.name}</h3>
+        {docDriverInfo?.aadhaarNumber && (
+          <div className="card" style={{ background: 'var(--bg)', padding: 10, marginBottom: 10 }}>
+            <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 18 }}>🪪</span>
+              <div>
+                <div className="small bold">Aadhaar Number (registered)</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{formatAadhaar(docDriverInfo.aadhaarNumber)}</div>
+                <div className="small muted">Validated via Verhough checksum at registration</div>
+              </div>
+            </div>
+          </div>
+        )}
+        {docBusy && <p className="muted">Loading documents…</p>}
+        {!docBusy && docList.length === 0 && <p className="muted">No documents uploaded yet.</p>}
+        {!docBusy && docList.map((doc) => {
+          const DOC_LABELS = { aadhaar: 'Aadhaar Card', rc: 'Vehicle RC', license: 'Driver License', bank: 'Bank Account Details', photo: 'Passport Photo', insurance: 'Insurance Certificate', puc: 'PUC Certificate', pcc: 'Police Clearance Certificate' };
+          const STATUS_CONFIG = { pending: { label: 'Under Review', cls: 'badge-amber' }, approved: { label: 'Approved', cls: 'badge-green' }, rejected: { label: 'Rejected', cls: 'badge-red' } };
+          const st = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pending;
+          const baseUrl = apiBase();
+          return (
+            <div key={doc._id} className="card" style={{ background: 'var(--bg)', padding: 12, marginBottom: 10 }}>
+              <div className="spread" style={{ marginBottom: 6 }}>
+                <b style={{ fontSize: 13 }}>{DOC_LABELS[doc.type] || doc.type}</b>
+                <span className={`badge ${st.cls}`}>{st.label}</span>
+              </div>
+              <div className="small muted" style={{ marginBottom: 6 }}>
+                {doc.originalName || doc.filename} — uploaded {new Date(doc.uploadedAt).toLocaleDateString('en-IN')}
+              </div>
+              {doc.status === 'rejected' && doc.rejectionReason && (
+                <div className="err-box mb" style={{ fontSize: 12 }}>Reason: {doc.rejectionReason}</div>
+              )}
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                <a href={`${baseUrl}/uploads/${doc.filename}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost small">
+                  View ↗
+                </a>
+                {doc.status !== 'approved' && (
+                  <button className="btn btn-primary small" disabled={docBusy} onClick={() => reviewDoc(doc._id, 'approve')}>
+                    Approve
+                  </button>
+                )}
+                {doc.status !== 'rejected' && (
+                  rejectDocId === doc._id ? (
+                    <div className="row" style={{ gap: 4, flex: 1 }}>
+                      <input className="input" style={{ flex: 1, fontSize: 12, padding: '6px 8px' }} placeholder="Rejection reason…" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} />
+                      <button className="btn btn-danger small" disabled={docBusy} onClick={() => reviewDoc(doc._id, 'reject', rejectReason)}>Confirm</button>
+                      <button className="btn btn-ghost small" onClick={() => { setRejectDocId(null); setRejectReason(''); }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn-danger small" disabled={docBusy} onClick={() => setRejectDocId(doc._id)}>
+                      Reject
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={() => { setDocTarget(null); setRejectDocId(null); setRejectReason(''); }}>Close</button>
         </div>
       </Modal>
     </div>

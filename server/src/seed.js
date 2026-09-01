@@ -80,6 +80,7 @@ async function seedDatabase() {
     role: 'driver',
     vehicleType: 'Toto (E-Rickshaw)',
     vehicleNumber: 'SK-01-T1200',
+    vehicleDetails: { seats: 4, brand: 'Mahindra', model: 'E-Alfa Mini', color: 'Green', insuranceUpto: '2027-12-31', permitUpto: '2027-12-31' },
     driverStatus: 'approved',
     isOnline: true,
     location: { lat: 27.3345, lng: 88.6135 },
@@ -87,6 +88,20 @@ async function seedDatabase() {
     ratingsCount: 12,
     earnings: 0,
     totalRides: 0,
+    termsAcceptedAt: new Date(),
+    termsVersion: '1.0',
+    privacyConsentAt: new Date(),
+    privacyConsentVersion: '1.0',
+    aggregatorAgreementAcceptedAt: new Date(),
+    trainingAcknowledgedAt: new Date(),
+    documents: [
+      { type: 'aadhaar', filename: 'aadhaar_demo.jpg', originalName: 'aadhaar.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'rc', filename: 'rc_demo.jpg', originalName: 'rc.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'license', filename: 'license_demo.jpg', originalName: 'license.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'bank', filename: 'bank_demo.jpg', originalName: 'bank.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'photo', filename: 'photo_demo.jpg', originalName: 'photo.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'pcc', filename: 'pcc_demo.jpg', originalName: 'pcc.jpg', status: 'approved', reviewedAt: new Date() },
+    ],
   });
 
   const driver2 = await User.create({
@@ -97,6 +112,7 @@ async function seedDatabase() {
     role: 'driver',
     vehicleType: 'Toto (E-Rickshaw)',
     vehicleNumber: 'SK-02-T4521',
+    vehicleDetails: { seats: 3, brand: 'Mahindra', model: 'E-Alfa Mini', color: 'Yellow', insuranceUpto: '2025-02-28', permitUpto: '2025-03-01' },
     driverStatus: 'approved',
     isOnline: true,
     location: { lat: 27.3375, lng: 88.6145 },
@@ -104,6 +120,20 @@ async function seedDatabase() {
     ratingsCount: 8,
     earnings: 0,
     totalRides: 0,
+    termsAcceptedAt: new Date(),
+    termsVersion: '1.0',
+    privacyConsentAt: new Date(),
+    privacyConsentVersion: '1.0',
+    aggregatorAgreementAcceptedAt: new Date(),
+    trainingAcknowledgedAt: new Date(),
+    documents: [
+      { type: 'aadhaar', filename: 'aadhaar_demo.jpg', originalName: 'aadhaar.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'rc', filename: 'rc_demo.jpg', originalName: 'rc.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'license', filename: 'license_demo.jpg', originalName: 'license.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'bank', filename: 'bank_demo.jpg', originalName: 'bank.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'photo', filename: 'photo_demo.jpg', originalName: 'photo.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'pcc', filename: 'pcc_demo.jpg', originalName: 'pcc.jpg', status: 'approved', reviewedAt: new Date() },
+    ],
   });
 
   const driver3 = await User.create({

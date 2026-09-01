@@ -1,17 +1,72 @@
 import { Router } from 'express';
+import multer from 'multer';
+import path from 'path';
+import crypto from 'crypto';
+import fs from 'fs';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Ride from '../models/Ride.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRideUpdate, clearDispatchTimer, toRideDTO, dispatchNext } from '../socket.js';
+import { getComplianceConfig, getRequiredDriverDocs } from '../services/settings.js';
+
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const ALLOWED_MIMES = {
+  aadhaar: ['application/pdf'],
+  rc: ['application/pdf'],
+  license: ['application/pdf'],
+  bank: ['application/pdf'],
+  photo: ['image/jpeg', 'image/png', 'image/webp'],
+  insurance: ['application/pdf'],
+  puc: ['application/pdf', 'image/jpeg', 'image/png'],
+  pcc: ['application/pdf', 'image/jpeg', 'image/png'],
+};
+
+const DOC_LABELS = { aadhaar: 'Aadhaar Card', rc: 'Vehicle RC', license: 'Driver License', bank: 'Bank Account Details', photo: 'Passport Photo', insurance: 'Insurance Certificate', puc: 'PUC Certificate', pcc: 'Police Clearance Certificate' };
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || '.pdf';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const docType = file.fieldname;
+    const allowed = ALLOWED_MIMES[docType];
+    if (!allowed) return cb(new Error(`Unknown document type: ${docType}`));
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error(`${DOC_LABELS[docType]} must be ${docType === 'photo' ? 'an image (JPG/PNG)' : 'a PDF file'}`));
+    }
+    cb(null, true);
+  },
+});
 
 export default function driverRoutes(io) {
   const router = Router();
   router.use(requireAuth, requireRole('driver'));
 
-  const requireApproved = (req, res, next) => {
+  const requireApproved = async (req, res, next) => {
     if (req.userDoc.driverStatus !== 'approved') {
       return res.status(403).json({ message: 'Your driver account is not approved yet' });
+    }
+    const compliance = await getComplianceConfig();
+    const REQUIRED_DOCS = Object.entries(getRequiredDriverDocs(compliance))
+      .filter(([, req]) => req)
+      .map(([t]) => t);
+    const docs = req.userDoc.documents || [];
+    const missing = REQUIRED_DOCS.filter((t) => {
+      const d = docs.find((x) => x.type === t);
+      return !d || d.status !== 'approved';
+    });
+    if (missing.length > 0) {
+      return res.status(403).json({ message: `Please upload and get approval for: ${missing.join(', ')}`, missingDocs: missing });
     }
     return next();
   };
@@ -46,6 +101,20 @@ export default function driverRoutes(io) {
     }
   });
 
+  // Acknowledge the driver training modules (GoI aggregator compliance).
+  router.post('/training-ack', requireAuth, async (req, res, next) => {
+    try {
+      const driver = await User.findByIdAndUpdate(
+        req.user.id,
+        { trainingAcknowledgedAt: new Date() },
+        { new: true }
+      ).select('-password');
+      res.json({ user: driver.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   const assignedRide = async (req, res, next) => {
     const ride = await Ride.findById(req.params.id);
     if (!ride) return res.status(404).json({ message: 'Ride not found' });
@@ -58,7 +127,42 @@ export default function driverRoutes(io) {
 
   router.post('/accept/:id', requireApproved, async (req, res, next) => {
     try {
-      const ride = await Ride.findById(req.params.id);
+      // applyAssignment mutates the ride, absorbing the driver's vehicle capacity
+      // for shared trips and re-pricing booked seats.
+      const applyAssignment = (ride) => {
+        clearDispatchTimer(ride._id);
+        ride.driver = req.user.id;
+        ride.status = 'assigned';
+        ride.acceptedAt = new Date();
+        ride.pendingDrivers = [];
+
+        // Seat-based shared trip: the real capacity is the driver's vehicle,
+        // so absorb it (never below seats already booked) and re-price per seat.
+        // Reserved trips are charged as a whole vehicle — keep the booked fare.
+        if (ride.shared?.enabled && ride.shared?.mode !== 'reserved' && !ride.shared?.reserved) {
+          const declared = Number(req.userDoc?.vehicleDetails?.seats);
+          const capacity = Math.max(
+            Number.isFinite(declared) && declared > 0 ? Math.round(declared) : 1,
+            ride.shared.seatsTaken || 1,
+            (ride.occupants || []).reduce((sum, o) => sum + (o.seats || 1), 0) || 1
+          );
+          ride.shared.seatCount = capacity;
+          ride.shared.availableSeats = Math.max(0, capacity - ride.shared.seatsTaken);
+          const tripTotal = ride.fareBreakup?.tripTotal || ride.fareBreakup?.total || ride.fare || 1;
+          const perSeat = Math.max(1, Math.round(tripTotal / capacity));
+          ride.shared.perSeatFare = perSeat;
+          (ride.occupants || []).forEach((o) => {
+            o.fare = perSeat * (o.seats || 1);
+            if (o.payment?.status === 'pending') o.payment.amount = o.fare;
+          });
+          const creatorOcc = ride.occupants.find((o) => String(o.rider) === String(ride.rider));
+          ride.fare = creatorOcc ? creatorOcc.fare : ride.fare;
+          if (ride.payment.status === 'pending') ride.payment.amount = ride.fare;
+          ride.markModified('occupants');
+        }
+      };
+
+      let ride = await Ride.findById(req.params.id);
       if (!ride) return res.status(404).json({ message: 'Ride not found' });
       if (ride.status !== 'requested') {
         return res.status(400).json({ message: 'This ride is no longer available' });
@@ -67,12 +171,22 @@ export default function driverRoutes(io) {
         return res.status(400).json({ message: 'You must be online with no active ride to accept' });
       }
 
-      clearDispatchTimer(ride._id);
-      ride.driver = req.user.id;
-      ride.status = 'assigned';
-      ride.acceptedAt = new Date();
-      ride.pendingDrivers = [];
-      await ride.save();
+      applyAssignment(ride);
+
+      // Retry once on a Mongoose optimistic-concurrency conflict: the concurrent
+      // background dispatch (socket.js) may have just bumped the ride's __v.
+      try {
+        await ride.save();
+      } catch (err) {
+        if (err && err.name === 'VersionError') {
+          ride = await Ride.findById(req.params.id);
+          if (!ride) return res.status(404).json({ message: 'Ride not found' });
+          applyAssignment(ride);
+          await ride.save();
+        } else {
+          throw err;
+        }
+      }
 
       await User.findByIdAndUpdate(req.user.id, { currentRide: ride._id, isOnline: true });
 
@@ -161,11 +275,21 @@ export default function driverRoutes(io) {
       if (req.ride.status !== 'completed') {
         return res.status(400).json({ message: 'Ride is not completed yet' });
       }
-      if (req.ride.payment.status !== 'cash_pending') {
+      const anyCashPending =
+        req.ride.payment.status === 'cash_pending' ||
+        (req.ride.occupants || []).some((o) => o.payment?.status === 'cash_pending');
+      if (!anyCashPending) {
         return res.status(400).json({ message: 'No cash payment pending on this ride' });
       }
       req.ride.payment.status = 'paid';
       req.ride.payment.paidAt = new Date();
+      (req.ride.occupants || []).forEach((o) => {
+        if (o.payment?.status === 'cash_pending') {
+          o.payment.status = 'paid';
+          o.payment.paidAt = new Date();
+        }
+      });
+      req.ride.markModified('occupants');
       await req.ride.save();
       emitRideUpdate(io, req.ride._id);
       res.json({ ride: await toRideDTO(req.ride._id) });
@@ -202,6 +326,113 @@ export default function driverRoutes(io) {
         completed,
         totals: totals[0] || { revenue: 0, count: 0 },
         online,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // --- Vehicle details -------------------------------------------------------
+  const VEHICLE_FIELDS = ['brand', 'model', 'year', 'color', 'seats', 'luggageCapacityKg', 'hasStep', 'hasCanopy', 'hasStorage', 'fuelType', 'insuranceUpto', 'permitUpto', 'engineCc', 'hasPillionSeat', 'helmetCount', 'hasTopBox'];
+  const VEHICLE_TYPE_MAP = { 'toto (e-rickshaw)': 'toto', 'auto rickshaw': 'auto', 'taxi': 'taxi', 'bike taxi': 'bike', 'cab': 'taxi', 'other': 'other' };
+
+  router.get('/vehicle', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.user.id).select('vehicleDetails vehicleNumber vehicleType');
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      res.json({ vehicleDetails: user.vehicleDetails || {}, vehicleNumber: user.vehicleNumber, vehicleType: user.vehicleType });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.put('/vehicle', async (req, res, next) => {
+    try {
+      const updates = {};
+      for (const key of VEHICLE_FIELDS) {
+        if (req.body[key] !== undefined) {
+          updates[`vehicleDetails.${key}`] = req.body[key];
+        }
+      }
+      if (req.body.vehicleNumber !== undefined) updates.vehicleNumber = req.body.vehicleNumber;
+      if (req.body.vehicleType !== undefined) {
+        const raw = String(req.body.vehicleType).trim();
+        updates.vehicleType = VEHICLE_TYPE_MAP[raw.toLowerCase()] || raw.toLowerCase();
+      }
+
+      const user = await User.findByIdAndUpdate(req.user.id, { $set: updates }, { new: true }).select('-password');
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      res.json({ message: 'Vehicle details saved', vehicleDetails: user.vehicleDetails, vehicleNumber: user.vehicleNumber, vehicleType: user.vehicleType });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // --- Document upload -------------------------------------------------------
+
+  router.post('/documents', (req, res, next) => {
+    const fields = [
+      { name: 'aadhaar', maxCount: 1 },
+      { name: 'rc', maxCount: 1 },
+      { name: 'license', maxCount: 1 },
+      { name: 'bank', maxCount: 1 },
+      { name: 'photo', maxCount: 1 },
+    ];
+    upload.fields(fields)(req, res, (err) => {
+      if (err) {
+        const msg = err.code === 'LIMIT_FILE_SIZE' ? 'File too large (max 5 MB)' : err.message;
+        return res.status(400).json({ message: msg });
+      }
+      next();
+    });
+  }, async (req, res, next) => {
+    try {
+      const user = await User.findById(req.user.id);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+
+      const uploaded = [];
+      for (const [docType, files] of Object.entries(req.files || {})) {
+        if (!files || !files.length) continue;
+        const file = files[0];
+        // Remove existing doc of same type
+        user.documents = user.documents.filter((d) => d.type !== docType);
+        user.documents.push({
+          type: docType,
+          filename: file.filename,
+          originalName: file.originalname,
+          status: 'pending',
+          uploadedAt: new Date(),
+        });
+        uploaded.push(docType);
+      }
+
+      if (uploaded.length === 0) {
+        return res.status(400).json({ message: 'No files uploaded. Use field names: aadhaar, rc, license, bank, photo' });
+      }
+
+      await user.save();
+      res.json({ message: `${uploaded.length} document(s) uploaded`, documents: user.documents });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/documents', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.user.id).select('documents aadhaarNumber phoneVerified');
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      const compliance = await getComplianceConfig();
+      const requiredMap = getRequiredDriverDocs(compliance);
+      const required = Object.entries(requiredMap).filter(([, r]) => r).map(([t]) => t);
+      const uploaded = (user.documents || []).map((d) => d.type);
+      const missing = required.filter((t) => !uploaded.includes(t));
+      res.json({
+        documents: user.documents || [],
+        missing,
+        required,
+        requiredMap,
+        aadhaarNumber: user.aadhaarNumber || '',
+        phoneVerified: user.phoneVerified || false,
       });
     } catch (err) {
       next(err);

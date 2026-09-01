@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import logo from '../assets/super-toto-logo.png';
 
 export default function Landing() {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const start = user ? (user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : '/ride') : '/register';
 
   return (
@@ -11,27 +13,24 @@ export default function Landing() {
       <div className="hero">
         <img src={logo} alt="Super Toto Local logo" className="hero-logo" />
         <span className="chip chip-active" style={{ fontSize: 15, padding: '8px 16px' }}>
-          Your local toto, on demand
+          {t('landing.heroChip')}
         </span>
         <h1>
-          Book a <span className="accent">toto</span>,<br />
-          any time. Anywhere.
+          {t('landing.heroTitle1')} <span className="accent">toto</span>,<br />
+          {t('landing.heroTitle2')}
         </h1>
-        <p>
-          Super Toto Local connects you with nearby totos &amp; e-rickshaws in minutes — with live
-          tracking, transparent fares, GST, surge pricing, UPI/Cash/Card payments <b>and Face Recognition login</b>.
-        </p>
+        <p>{t('landing.heroSub')}</p>
         <p className="muted" style={{ marginTop: '-6px', marginBottom: '22px' }}>
-          A Unit of TSA Enterprises
+          {t('common.appUnit')}
         </p>
         <div className="hero-btns">
           <Link to={start} className="btn btn-primary btn-lg">
-            {user ? 'Open app' : 'Get started'}
+            {user ? t('landing.openApp') : t('landing.getStarted')}
           </Link>
           {!user && (
             <>
               <Link to="/login" className="btn btn-ghost btn-lg">
-                Log in
+                {t('landing.login')}
               </Link>
             </>
           )}
@@ -39,61 +38,67 @@ export default function Landing() {
       </div>
 
       <div className="card demo-card">
-        <h3>🔑 Try it with the demo accounts</h3>
+        <h3>{t('landing.demoTitle')}</h3>
         <div className="demo-accounts">
           <div className="demo-account">
-            <b>👤 Rider</b>
+            <b>{t('landing.demoRider')}</b>
             <div className="small muted">rider@supertoto.local</div>
             <div className="small muted">demo123</div>
           </div>
           <div className="demo-account">
-            <b>🛺 Driver</b>
+            <b>{t('landing.demoDriver')}</b>
             <div className="small muted">driver@supertoto.local</div>
             <div className="small muted">demo123</div>
           </div>
           <div className="demo-account">
-            <b>🛠️ Admin</b>
+            <b>{t('landing.demoAdmin')}</b>
             <div className="small muted">admin@supertoto.local</div>
             <div className="small muted">demo123</div>
           </div>
         </div>
-        <p className="small muted mt">
-          Tip: open two browser windows — log in as rider in one and driver in the other, then book
-          a ride to watch live dispatch &amp; tracking.
-        </p>
+        <p className="small muted mt">{t('landing.demoTip')}</p>
       </div>
 
       <div className="features">
         <div className="feature">
           <div className="icon">📱</div>
-          <h4>Book in seconds</h4>
-          <p>Set pickup &amp; drop on the map, see the fare instantly, tap to request.</p>
+          <h4>{t('landing.featureBookTitle')}</h4>
+          <p>{t('landing.featureBookSub')}</p>
         </div>
         <div className="feature">
           <div className="icon">🛰️</div>
-          <h4>Live tracking</h4>
-          <p>Watch your toto approach in real time over WebSockets.</p>
+          <h4>{t('landing.featureTrackTitle')}</h4>
+          <p>{t('landing.featureTrackSub')}</p>
         </div>
         <div className="feature">
           <div className="icon">🛺</div>
-          <h4>Driver app</h4>
-          <p>Go online, accept nearby ride requests, complete trips and earn.</p>
+          <h4>{t('landing.featureDriverTitle')}</h4>
+          <p>{t('landing.featureDriverSub')}</p>
         </div>
         <div className="feature">
           <div className="icon">📊</div>
-          <h4>Admin dashboard</h4>
-          <p>Approve drivers, monitor rides and track revenue.</p>
+          <h4>{t('landing.featureAdminTitle')}</h4>
+          <p>{t('landing.featureAdminSub')}</p>
         </div>
         <div className="feature">
           <div className="icon">💳</div>
-          <h4>Smart payments</h4>
-          <p>Pay by UPI, Card or Cash after every ride, with transparent GST, surge pricing and driver commission.</p>
+          <h4>{t('landing.featurePayTitle')}</h4>
+          <p>{t('landing.featurePaySub')}</p>
         </div>
         <div className="feature">
           <div className="icon">⭐</div>
-          <h4>Ratings</h4>
-          <p>Rate your driver and rider to keep the community trusted.</p>
+          <h4>{t('landing.featureRateTitle')}</h4>
+          <p>{t('landing.featureRateSub')}</p>
         </div>
+      </div>
+
+      <div className="demo-card" style={{ textAlign: 'center', borderTop: '1px solid var(--border)', padding: '16px 12px' }}>
+        <div className="small muted">
+          Legal: <Link to="/legal/privacy">Privacy Policy (DPDP)</Link> ·{' '}
+          <Link to="/legal/disclosures">Disclosures</Link> ·{' '}
+          <Link to="/legal/disclosures">Grievance Officer</Link>
+        </div>
+        <div className="small muted mt" style={{ marginTop: 4 }}>© {new Date().getFullYear()} TSA Enterprises · Operated under the Motor Vehicle Aggregator Guidelines, Ministry of Road Transport &amp; Highways, GoI</div>
       </div>
     </div>
   );
