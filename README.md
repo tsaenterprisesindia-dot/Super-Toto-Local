@@ -68,6 +68,17 @@ Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/socket.
 - By default the app uses **MongoDB in-memory** (`mongodb-memory-server`), so it runs with zero setup. Data resets on each restart, and demo data is auto-seeded on first boot.
 - For a persistent DB, copy `server/.env.example` → `server/.env` and set `MONGODB_URI` (Atlas/local). `npm run seed` force-seeds demo data into an empty DB.
 
+## Go live on Render
+
+`render.yaml` is a [Render Blueprint](https://render.com/docs/blueprint-spec) — one-click deploy from this repo:
+
+1. In Render: **Dashboard → New → Blueprint → select `Super-Toto-Local` → Apply**.
+2. Render builds the React app (`npm ci && npm run build`) and starts `node server/src/index.js`.
+3. The server then serves the built app **and** the API on one URL (same-origin `/api` + `/socket.io`).
+4. Env vars: `JWT_SECRET` is auto-generated (required in production), `MONGODB_URI` and `UPI_ID` are optional — leave `MONGODB_URI` blank for an in-memory demo (data resets on cold start), or paste an Atlas connection string for persistent data.
+
+> GitHub Pages can't host this app — it serves static files only, whereas Super Toto needs a Node server, WebSockets and a database (all provided by Render).
+
 ## Configuration (`server/.env.example`)
 
 | Variable | Default | Purpose |

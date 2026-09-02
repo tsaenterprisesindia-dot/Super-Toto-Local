@@ -12,7 +12,8 @@
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
     "seed": "npm run seed -w server",
-    "build": "npm run build -w client"
+    "build": "npm run build -w client",
+    "start:prod": "node server/src/index.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

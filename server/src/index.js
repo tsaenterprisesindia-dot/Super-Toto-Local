@@ -23,6 +23,26 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/api', routes(io));
+
+// In production the backend also serves the built React app, so the whole app
+// lives on one host (same-origin /api + /socket.io). Dev (Vite on :5173) is
+// unaffected because NODE_ENV is unset locally.
+if (process.env.NODE_ENV === 'production') {
+  const clientDist = path.resolve(__dirname, '..', '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  app.use((req, res, next) => {
+    if (
+      req.method === 'GET' &&
+      !req.path.startsWith('/api') &&
+      !req.path.startsWith('/socket.io') &&
+      !req.path.startsWith('/uploads')
+    ) {
+      return res.sendFile(path.join(clientDist, 'index.html'));
+    }
+    return next();
+  });
+}
+
 app.use(notFound);
 app.use(errorHandler);
 

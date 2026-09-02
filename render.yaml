@@ -1,0 +1,35 @@
+# Render Blueprint for Super Toto Local
+# How to use: push this file to GitHub, then in Render go to
+#   Dashboard -> New -> Blueprint -> select the repo -> Apply.
+# Render detects `render.yaml` and creates the service automatically.
+#
+# It builds the React app, then runs the Node server which also serves the
+# built client (same-origin /api + /socket.io). MongoDB is optional: set
+# MONGODB_URI to a persistent DB (e.g. Atlas free tier), otherwise the app uses
+# in-memory MongoDB and data resets after each cold start.
+
+services:
+  - type: web
+    name: super-toto-local
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: node server/src/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: NODE_ENV
+        value: production
+      # The server refuses to start in production without a real JWT_SECRET,
+      # so Render generates a strong random one for you.
+      - key: JWT_SECRET
+        generateValue: true
+      # Optional: leave blank to use in-memory MongoDB (demo, resets on restart).
+      # Set to your Atlas/local connection string for persistent data.
+      - key: MONGODB_URI
+        sync: false
+      # Optional: operator UPI handle shown for payments.
+      - key: UPI_ID
+        sync: false
