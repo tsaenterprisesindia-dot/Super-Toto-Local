@@ -12,7 +12,7 @@
     "dev:server": "npm run dev -w server",
     "dev:client": "npm run dev -w client",
     "seed": "npm run seed -w server",
-    "build": "cd client && npx --no-install vite build",
+    "build": "cd client && node ../node_modules/vite/bin/vite.js build",
     "start:prod": "node server/src/index.js"
   },
   "devDependencies": {
