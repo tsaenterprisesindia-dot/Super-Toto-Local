@@ -90,7 +90,7 @@ export default function AdminSettings() {
   const [fbForm, setFbForm] = useState({});
   const [fbSaving, setFbSaving] = useState(false);
   const [fbMsg, setFbMsg] = useState('');
-  const [upiForm, setUpiForm] = useState({ upiId: 'anilmandal27@okhdfcbank', merchantName: 'Super Toto Local', enabled: true, showQr: true, instructions: 'Scan the QR or tap the button below to pay via any UPI app.' });
+  const [upiForm, setUpiForm] = useState({ upiId: '', merchantName: 'Super Toto Local', enabled: true, showQr: true, instructions: 'Scan the QR or tap the button below to pay via any UPI app.' });
   const [upiSaving, setUpiSaving] = useState(false);
   const [upiMsg, setUpiMsg] = useState('');
   const [contactForm, setContactForm] = useState({ helplinePhone: '+919811997286', helplineLabel: '24×7 Helpline', email: 'tsaenterprisesindia@gmail.com', whatsapp: '+919811997286', showHelpline: true });
@@ -493,7 +493,7 @@ export default function AdminSettings() {
         <button className="btn btn-primary" disabled={upiSaving} onClick={submitUpi}>
           {upiSaving ? 'Saving…' : 'Save UPI settings'}
         </button>
-        <button className="btn btn-ghost" disabled={upiSaving} onClick={() => setUpiForm({ upiId: 'anilmandal27@okhdfcbank', merchantName: 'Super Toto Local', enabled: true, showQr: true, instructions: 'Scan the QR or tap the button below to pay via any UPI app.' })}>
+        <button className="btn btn-ghost" disabled={upiSaving} onClick={() => setUpiForm({ upiId: '', merchantName: 'Super Toto Local', enabled: true, showQr: true, instructions: 'Scan the QR or tap the button below to pay via any UPI app.' })}>
           Reset to defaults
         </button>
       </div>

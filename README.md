@@ -73,7 +73,8 @@ Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/socket.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `MONGODB_URI` | (in-memory) | Persistent MongoDB connection (Atlas/local) |
-| `JWT_SECRET` | `super-toto-dev-secret` | JWT signing secret |
+| `JWT_SECRET` | *(required for non-local runs)* | JWT signing secret — the server **refuses to start in production without it** |
+| `UPI_ID` | *(empty)* | Operator UPI handle for payments (`Admin → Settings → UPI` can also set it) |
 | `FACE_MATCH_THRESHOLD` | `0.6` | Max L2 distance to accept a face match |
 | `PORT` | `5000` | API port |
 

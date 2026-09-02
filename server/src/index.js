@@ -30,6 +30,16 @@ setupSocket(io);
 
 const PORT = process.env.PORT || 5000;
 
+// Security gate: never allow a production start with the default JWT secret, or
+// anyone could forge auth tokens. Local dev keeps the fallback with a warning.
+if (!process.env.JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[security] REFUSING TO START: set JWT_SECRET (a long random value) before running in production.');
+    process.exit(1);
+  }
+  console.warn('[security] WARNING: no JWT_SECRET set — using the dev-only fallback secret. Set JWT_SECRET in server/.env for any non-local run.');
+}
+
 async function start() {
   const mongo = await connectDB();
   await seedIfEmpty(mongo);

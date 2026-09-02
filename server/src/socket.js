@@ -3,6 +3,7 @@ import User from './models/User.js';
 import Ride from './models/Ride.js';
 import { haversineKm, VEHICLE_TYPES } from './utils/pricing.js';
 import { getPricingConfig } from './services/settings.js';
+import { getJwtSecret } from './middleware/auth.js';
 
 const dispatchTimers = new Map();
 
@@ -124,7 +125,7 @@ export function setupSocket(io) {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error('Not authenticated'));
     try {
-      const payload = jwt.verify(token, process.env.JWT_SECRET || 'super-toto-dev-secret');
+      const payload = jwt.verify(token, getJwtSecret());
       const user = await User.findById(payload.id);
       if (!user || user.isHidden) return next(new Error('Account deactivated'));
       socket.user = { id: payload.id, role: payload.role };

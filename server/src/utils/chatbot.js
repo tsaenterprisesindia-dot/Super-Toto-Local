@@ -1,4 +1,4 @@
-import { getPricingConfig, getVehicleRatesConfig, getContactConfig, getSeatBookingConfig, SEAT_MODES } from '../services/settings.js';
+import { getPricingConfig, getVehicleRatesConfig, getContactConfig, getSeatBookingConfig, getUpiConfig, SEAT_MODES } from '../services/settings.js';
 import { VEHICLE_TYPES, computeFare, estimate } from './pricing.js';
 
 const VEHICLE_KEYWORDS = {
@@ -36,8 +36,8 @@ function detectDistance(text) {
 
 export async function handleChatbotMessage(text, role = 'rider', config = {}) {
   const t = norm(text);
-  const cfgs = await Promise.all([getPricingConfig(), getVehicleRatesConfig(), getContactConfig(), getSeatBookingConfig()]);
-  const [pricing, vehicleRates, contact, seatCfg] = cfgs;
+  const cfgs = await Promise.all([getPricingConfig(), getVehicleRatesConfig(), getContactConfig(), getSeatBookingConfig(), getUpiConfig()]);
+  const [pricing, vehicleRates, contact, seatCfg, upi] = cfgs;
   const seatMode = SEAT_MODES.includes(seatCfg.mode) ? seatCfg.mode : 'shared';
   const botName = config.botName || 'Toto Assist';
   const vehicle = detectVehicle(t);
@@ -175,7 +175,7 @@ export async function handleChatbotMessage(text, role = 'rider', config = {}) {
           `2️⃣ Or tap "Open UPI App"\n` +
           `3️⃣ Complete the payment\n` +
           `4️⃣ Tap "I've paid"\n\n` +
-          `UPI ID: **${contact.helplinePhone || 'anilmandal27@okhdfcbank'}** (or as shown on the QR)`,
+          `UPI ID: **${upi.upiId || 'shown on the QR at payment time'}** (or as shown on the QR)`,
         ['💳 Payments', '💰 Fares']
       );
     }

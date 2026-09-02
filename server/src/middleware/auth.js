@@ -1,8 +1,15 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 
+// Single source of truth for the JWT secret. The dev fallback keeps the local
+// demo runnable without a .env, but a production start without JWT_SECRET is
+// blocked at startup (see index.js) so tokens can never be forged in deploys.
+export function getJwtSecret() {
+  return process.env.JWT_SECRET || 'super-toto-dev-secret';
+}
+
 export function signToken(user) {
-  return jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET || 'super-toto-dev-secret', {
+  return jwt.sign({ id: user._id, role: user.role }, getJwtSecret(), {
     expiresIn: '7d',
   });
 }
@@ -14,7 +21,7 @@ export async function requireAuth(req, res, next) {
     return res.status(401).json({ message: 'Not authenticated' });
   }
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'super-toto-dev-secret');
+    const payload = jwt.verify(token, getJwtSecret());
     req.user = { id: payload.id, role: payload.role };
     const user = await User.findById(payload.id).select('-password');
     if (!user) {

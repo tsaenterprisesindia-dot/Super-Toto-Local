@@ -45,7 +45,7 @@ export default function routes(io) {
   router.get('/upi-config', async (_req, res) => {
     try {
       res.json({ upiConfig: await getUpiConfig() });
-    } catch (err) { res.json({ upiConfig: { upiId: 'anilmandal27@okhdfcbank', merchantName: 'Super Toto Local', enabled: true, showQr: true } }); }
+    } catch (err) { res.json({ upiConfig: { upiId: process.env.UPI_ID || '', merchantName: 'Super Toto Local', enabled: true, showQr: true } }); }
   });
   router.get('/contact-config', async (_req, res) => {
     try {
