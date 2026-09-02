@@ -30,9 +30,11 @@ Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/socket.
 
 | Role | Email | Password | Face login |
 | --- | --- | --- | --- |
-| Rider | `rider@supertoto.local` | `demo123` | Register a face first (see below) |
-| Driver | `driver@supertoto.local` | `demo123` | Register a face first |
-| Admin | `admin@supertoto.local` | `demo123` | Password only (no face) |
+| Rider | `rider@supertoto.local` | `Rider@Gangtok1` | Register a face first (see below) |
+| Driver | `driver@supertoto.local` | `Driver@Toto9` | Register a face first |
+| Admin | `admin@supertoto.local` | `Admin@Toto2k26` | Password only (no face) |
+
+> Each seeded account has its **own password** so no user can guess another account's credentials. The admin credentials are **not shown anywhere in the public app UI** (login page, landing page) — they are listed here (in the repo/README) only for the operator.
 
 > Seeded accounts log in by **password** first. Then open **Profile → Register face** to enable Face Recognition login. After that you can use **Login → Log in with Face Recognition**.
 

@@ -39,9 +39,9 @@ If you clone and run locally you can log in as:
 
 | Role | Email | Password |
 | --- | --- | --- |
-| Rider | `rider@supertoto.local` | `demo123` |
-| Driver | `driver@supertoto.local` | `demo123` |
-| Admin | `admin@supertoto.local` | `demo123` |
+| Rider | `rider@supertoto.local` | `Rider@Gangtok1` |
+| Driver | `driver@supertoto.local` | `Driver@Toto9` |
+| Admin | `admin@supertoto.local` | `Admin@Toto2k26` |
 
 Run with `npm install` then `npm run dev`, and open http://localhost:5173.
 

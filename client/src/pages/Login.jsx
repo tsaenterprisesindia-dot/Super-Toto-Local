@@ -38,9 +38,12 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [otpBusy, setOtpBusy] = useState(false);
 
-  const quick = (mail) => {
+  // Demo quick-fill only for rider/driver. Admin credentials are intentionally
+  // NOT auto-filled on the public login page — the admin console must not be
+  // one-click reachable by anyone.
+  const quick = (mail, pw) => {
     setEmail(mail);
-    setPassword('demo123');
+    setPassword(pw);
   };
 
   const pickRole = (r) => {
@@ -211,11 +214,10 @@ export default function Login() {
             {t('login.demoTitle')}
           </div>
           <div className="row">
-            <button className="btn btn-ghost small" onClick={() => { pickRole('rider'); quick('rider@supertoto.local'); }}>{t('login.roleRider')}</button>
-            <button className="btn btn-ghost small" onClick={() => { pickRole('driver'); quick('driver@supertoto.local'); }}>{t('login.roleDriver')}</button>
-            <button className="btn btn-ghost small" onClick={() => { pickRole('admin'); quick('admin@supertoto.local'); }}>{t('login.roleAdmin')}</button>
+            <button className="btn btn-ghost small" onClick={() => { pickRole('rider'); quick('rider@supertoto.local', 'Rider@Gangtok1'); }}>{t('login.roleRider')}</button>
+            <button className="btn btn-ghost small" onClick={() => { pickRole('driver'); quick('driver@supertoto.local', 'Driver@Toto9'); }}>{t('login.roleDriver')}</button>
           </div>
-          <div className="small muted mt">{t('login.otpDemo')}</div>
+          <div className="small muted mt">{t('login.demoHint')}</div>
         </div>
       </div>
     </div>

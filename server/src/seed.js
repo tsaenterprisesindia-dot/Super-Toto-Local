@@ -16,7 +16,16 @@ const DESTINATIONS = [
   { name: 'Ranka / Baluwakhani', lat: 27.3229, lng: 88.6265 },
 ];
 
-const PASSWORD = 'demo123';
+// Unique per-account credentials. Each demo account has its OWN password so no
+// user can guess another account's password. These are demo-only values listed
+// in the README (not exposed anywhere in the public app UI).
+const PASSWORDS = {
+  admin: 'Admin@Toto2k26',
+  rider: 'Rider@Gangtok1',
+  driver1: 'Driver@Toto9',
+  driver2: 'Driver@Toto9',
+  driver3: 'Driver@Toto9',
+};
 
 function buildRideData({ rider, driver, pickupIdx, dropIdx, daysAgo, paid = true, rated = true, method = 'UPI' }) {
   const pickup = DESTINATIONS[pickupIdx];
@@ -54,13 +63,15 @@ function buildRideData({ rider, driver, pickupIdx, dropIdx, daysAgo, paid = true
 }
 
 async function seedDatabase() {
-  const password = await bcrypt.hash(PASSWORD, 10);
+  const adminPw = await bcrypt.hash(PASSWORDS.admin, 10);
+  const riderPw = await bcrypt.hash(PASSWORDS.rider, 10);
+  const driverPw = await bcrypt.hash(PASSWORDS.driver1, 10);
 
   const admin = await User.create({
     name: 'Toto Admin',
     email: 'admin@supertoto.local',
     phone: '9000000001',
-    password,
+    password: adminPw,
     role: 'admin',
   });
 
@@ -68,7 +79,7 @@ async function seedDatabase() {
     name: 'Rider Demo',
     email: 'rider@supertoto.local',
     phone: '9000000002',
-    password,
+    password: riderPw,
     role: 'rider',
   });
 
@@ -76,7 +87,7 @@ async function seedDatabase() {
     name: 'Bikash Sharma',
     email: 'driver@supertoto.local',
     phone: '9000000003',
-    password,
+    password: driverPw,
     role: 'driver',
     vehicleType: 'Toto (E-Rickshaw)',
     vehicleNumber: 'SK-01-T1200',
@@ -108,7 +119,7 @@ async function seedDatabase() {
     name: 'Manoj Rai',
     email: 'driver2@supertoto.local',
     phone: '9000000004',
-    password,
+    password: driverPw,
     role: 'driver',
     vehicleType: 'Toto (E-Rickshaw)',
     vehicleNumber: 'SK-02-T4521',
@@ -140,7 +151,7 @@ async function seedDatabase() {
     name: 'Kumar Pradhan',
     email: 'driver3@supertoto.local',
     phone: '9000000005',
-    password,
+    password: driverPw,
     role: 'driver',
     vehicleType: 'Auto Rickshaw',
     vehicleNumber: 'SK-03-T9876',
@@ -175,9 +186,9 @@ export async function seedIfEmpty(mongoServer) {
   }
   const { rider, driver1 } = await seedDatabase();
   console.log('[seed] demo data created');
-console.log('[seed]   rider:  rider@supertoto.local / demo123');
-console.log('[seed]   driver: driver@supertoto.local / demo123');
-console.log('[seed]   admin:  admin@supertoto.local / demo123');
+  console.log(`[seed]   rider:  rider@supertoto.local / ${PASSWORDS.rider}`);
+  console.log(`[seed]   driver: driver@supertoto.local / ${PASSWORDS.driver1}`);
+  console.log(`[seed]   admin:  admin@supertoto.local / ${PASSWORDS.admin}`);
   console.log('[seed]   face login: log in with password, then enroll a face in Profile to enable Face Recognition');
   await mongoServer?.waitUntilReady?.();
 }
