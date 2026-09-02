@@ -1,0 +1,18 @@
+{
+  "name": "Super Toto Local",
+  "short_name": "Super Toto",
+  "description": "Super Toto Local connects you with nearby totos & e-rickshaws in minutes — with live tracking, transparent fares, mock payments and Face Recognition login. A Unit of TSA Enterprises.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8",
+  "categories": ["transportation", "navigation", "lifestyle"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

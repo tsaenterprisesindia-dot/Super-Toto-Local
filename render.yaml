@@ -3,10 +3,11 @@
 #   Dashboard -> New -> Blueprint -> select the repo -> Apply.
 # Render detects `render.yaml` and creates the service automatically.
 #
-# It builds the React app, then runs the Node server which also serves the
-# built client (same-origin /api + /socket.io). MongoDB is optional: set
-# MONGODB_URI to a persistent DB (e.g. Atlas free tier), otherwise the app uses
-# in-memory MongoDB and data resets after each cold start.
+# The frontend is committed pre-built at client/dist, so Render only installs
+# server dependencies (npm ci) and starts the Node server, which serves both
+# the built client and the API on one URL (same-origin /api + /socket.io).
+# MongoDB is optional: set MONGODB_URI to a persistent DB (e.g. Atlas free
+# tier), otherwise the app uses in-memory MongoDB and data resets on cold start.
 
 services:
   - type: web
@@ -14,7 +15,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci
     startCommand: node server/src/index.js
     healthCheckPath: /api/health
     envVars:

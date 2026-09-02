@@ -1,5 +1,10 @@
 node_modules/
 dist/
+# Commit the built frontend so Render can serve it without running vite.
+!client/dist/
+!client/dist/**
+# Duplicate asset caches inside dist stay ignored.
+client/dist/duplicated.assets/
 .env
 *.log
 *.pid
