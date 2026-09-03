@@ -70,7 +70,7 @@ async function seedDatabase() {
   const admin = await User.create({
     name: 'Toto Admin',
     email: 'admin@supertoto.local',
-    phone: '9000000001',
+    phone: '9811997286',
     password: adminPw,
     role: 'admin',
   });

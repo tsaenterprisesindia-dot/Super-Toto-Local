@@ -36,6 +36,8 @@ Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/socket.
 
 > Each seeded account has its **own password** so no user can guess another account's credentials. The admin credentials are **not shown anywhere in the public app UI** (login page, landing page) — they are listed here (in the repo/README) only for the operator.
 
+> **Admin Mobile OTP login:** On the **Login → Mobile OTP** tab, select **Admin** and enter `9811997286`. A demo OTP is returned; enter it to log in as admin (no password needed).
+
 > Seeded accounts log in by **password** first. Then open **Profile → Register face** to enable Face Recognition login. After that you can use **Login → Log in with Face Recognition**.
 
 ## Face Recognition login — how it works
