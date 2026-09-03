@@ -163,10 +163,8 @@ export default function Login() {
               </div>
             </div>
 
-            {demoOtp && (
-              <div className="alert alert-info mb">
-                <b>{t('login.demoSmsLabel')}:</b> {t('login.demoSmsBody', { otp: demoOtp })}
-              </div>
+            {(demoOtp || expiresAt > 0) && (
+              <div className="alert alert-info mb">{t('login.otpSent')}</div>
             )}
 
             {expiresAt > 0 && (
