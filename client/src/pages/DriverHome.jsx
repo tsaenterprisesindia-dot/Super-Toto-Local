@@ -167,8 +167,7 @@ export default function DriverHome() {
             <h2>⏳ Account pending approval</h2>
             <p>
               Your driver account is <b>{user.driverStatus}</b>. An admin must approve it before you
-              can go online. Try the seeded account <code>driver@supertoto.local</code> to
-              see the full driver flow.
+              can go online. Please upload your documents for review.
             </p>
             <Link to="/driver/documents" className="btn btn-primary" style={{ display: 'inline-block', marginTop: 8 }}>
               📄 Upload Documents

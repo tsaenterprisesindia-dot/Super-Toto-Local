@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import client from '../api/client.js';
@@ -24,9 +24,10 @@ export default function Login() {
   const { login, otpLogin, sendOtp } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [mode, setMode] = useState('password'); // password | otp
-  const [role, setRole] = useState('rider');
+  const [role, setRole] = useState(searchParams.get('role') === 'admin' ? 'admin' : 'rider');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [otpPhone, setOtpPhone] = useState('');
@@ -37,14 +38,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [otpBusy, setOtpBusy] = useState(false);
-
-  // Demo quick-fill only for rider/driver. Admin credentials are intentionally
-  // NOT auto-filled on the public login page — the admin console must not be
-  // one-click reachable by anyone.
-  const quick = (mail, pw) => {
-    setEmail(mail);
-    setPassword(pw);
-  };
 
   const pickRole = (r) => {
     setRole(r);
@@ -207,17 +200,6 @@ export default function Login() {
 
         <div className="small muted mt" style={{ textAlign: 'center' }}>
           {t('login.noAccount')} <Link to="/register">{t('login.createOne')}</Link>
-        </div>
-
-        <div className="card mt" style={{ background: 'var(--bg)', boxShadow: 'none' }}>
-          <div className="small muted mb" style={{ fontWeight: 700 }}>
-            {t('login.demoTitle')}
-          </div>
-          <div className="row">
-            <button className="btn btn-ghost small" onClick={() => { pickRole('rider'); quick('rider@supertoto.local', 'Rider@Gangtok1'); }}>{t('login.roleRider')}</button>
-            <button className="btn btn-ghost small" onClick={() => { pickRole('driver'); quick('driver@supertoto.local', 'Driver@Toto9'); }}>{t('login.roleDriver')}</button>
-          </div>
-          <div className="small muted mt">{t('login.demoHint')}</div>
         </div>
       </div>
     </div>

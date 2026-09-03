@@ -37,23 +37,6 @@ export default function Landing() {
         </div>
       </div>
 
-      <div className="card demo-card">
-        <h3>{t('landing.demoTitle')}</h3>
-        <div className="demo-accounts">
-          <div className="demo-account">
-            <b>{t('landing.demoRider')}</b>
-            <div className="small muted">rider@supertoto.local</div>
-            <div className="small muted">{t('landing.demoPwRider')}</div>
-          </div>
-          <div className="demo-account">
-            <b>{t('landing.demoDriver')}</b>
-            <div className="small muted">driver@supertoto.local</div>
-            <div className="small muted">{t('landing.demoPwDriver')}</div>
-          </div>
-        </div>
-        <p className="small muted mt">{t('landing.demoTip')}</p>
-      </div>
-
       <div className="features">
         <div className="feature">
           <div className="icon">📱</div>
