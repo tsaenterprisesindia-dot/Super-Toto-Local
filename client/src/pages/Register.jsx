@@ -170,8 +170,8 @@ export default function Register() {
         {err && <div className="err-box">{err}</div>}
 
         <div className="tab-row">
-          <button className={`tab${role === 'rider' ? ' active' : ''}`} onClick={() => { setRole('rider'); setTermsAccepted(false); }}>I ride</button>
-          <button className={`tab${role === 'driver' ? ' active' : ''}`} onClick={() => { setRole('driver'); setTermsAccepted(false); }}>I drive a toto</button>
+          <button className={`tab${role === 'rider' ? ' active' : ''}`} onClick={() => { setRole('rider'); setTermsAccepted(false); }}>Book a Ride</button>
+          <button className={`tab${role === 'driver' ? ' active' : ''}`} onClick={() => { setRole('driver'); setTermsAccepted(false); }}>Driver Panel</button>
         </div>
 
         {role === 'driver' && (

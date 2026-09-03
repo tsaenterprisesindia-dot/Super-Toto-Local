@@ -6,7 +6,7 @@ import logo from '../assets/super-toto-logo.png';
 export default function Landing() {
   const { user } = useAuth();
   const { t } = useTranslation();
-  const start = user ? (user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : '/ride') : '/register';
+  const start = user ? (user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : '/ride') : '/login';
 
   return (
     <div className="landing">
