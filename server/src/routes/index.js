@@ -69,7 +69,12 @@ export default function routes(io) {
       const stateCode = String(req.query.state || '').trim().toUpperCase();
       const sp = await resolveFarePolicy(stateCode);
       if (!sp) {
-        return res.json({ available: false, states: INDIA_STATES.length, message: 'No active fare policy for this state — national default fares apply.' });
+        return res.json({
+          available: false,
+          states: INDIA_STATES.map((s) => ({ code: s.code, name: s.name })),
+          defaultState: stateName(''),
+          message: 'No active fare policy for this state — national default fares apply.',
+        });
       }
       res.json({
         available: true,
