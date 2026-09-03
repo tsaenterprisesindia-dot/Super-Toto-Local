@@ -129,9 +129,6 @@ export default function authRoutes() {
         if (!user) {
           return res.status(404).json({ message: 'No account found with this mobile number. Create an account first.' });
         }
-        if (user.role === 'admin') {
-          return res.status(403).json({ message: 'Admins must log in with password and security check.' });
-        }
         if (user.isHidden) {
           return res.status(403).json({ message: 'This account has been deactivated. Contact the admin.' });
         }

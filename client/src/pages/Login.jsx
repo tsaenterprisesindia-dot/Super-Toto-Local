@@ -180,13 +180,9 @@ export default function Login() {
               </div>
             )}
 
-            {role === 'admin' ? (
-              <div className="alert alert-warn mb">{t('login.adminOtpBlocked')}</div>
-            ) : (
-              <button className="btn btn-primary btn-block btn-lg" disabled={busy || !otp || expired || otp.length < 6}>
-                {busy ? t('login.verifying') : t('login.loginWithOtp')}
-              </button>
-            )}
+            <button className="btn btn-primary btn-block btn-lg" disabled={busy || !otp || expired || otp.length < 6}>
+              {busy ? t('login.verifying') : t('login.loginWithOtp')}
+            </button>
           </form>
         )}
 
