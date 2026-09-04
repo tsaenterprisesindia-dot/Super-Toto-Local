@@ -11,6 +11,8 @@ import {
   computeLuggageCharge,
 } from '../utils/pricing.js';
 import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
+import { settleCashDue } from '../services/cashSettlement.js';
+import { CashLedger } from '../models/CashLedger.js';
 import { buildGstInvoice } from '../utils/invoice.js';
 import {
   dispatchRideRequest,
@@ -598,6 +600,29 @@ export default function rideRoutes(io) {
         ride.payment = { ...ride.payment, ...pay };
       }
       await ride.save();
+
+      // Auto-deduction: when the rider pays digitally, the platform receives the
+      // funds. Any cash the driver owes from earlier cash-paid rides is settled
+      // first from what the platform would otherwise pay the driver digitally.
+      if (method !== 'Cash' && !isFeePayment && ride.driver) {
+        const already = await CashLedger.exists({
+          driver: ride.driver,
+          'entries.rideId': ride._id,
+          'entries.type': 'auto_deduct',
+        });
+        if (!already) {
+          const earning = ride.fareBreakup?.driverEarnings || 0;
+          if (earning > 0) {
+            await settleCashDue({
+              driverId: ride.driver,
+              amount: Math.min(earning, amount || earning),
+              rideId: ride._id,
+              source: 'auto_deduct',
+              note: `Auto-deducted from digital earnings on ride ${ride._id}`,
+            });
+          }
+        }
+      }
 
       emitRideUpdate(io, ride._id);
       res.json({ ride: await toRideDTO(ride._id) });

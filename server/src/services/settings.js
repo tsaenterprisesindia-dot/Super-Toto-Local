@@ -638,6 +638,12 @@ export const COMPLIANCE_DEFAULTS = {
     phone: '',
     address: '',
   },
+  // Cash-settlement policy: how long a driver may hold the platform's cash share
+  // collected on cash rides before being blocked, and the free-carry limit.
+  cashSettlement: {
+    overdueLimit: 500, // ₹ — below this, no urgency even if old
+    deadlineHours: 48, // hours allowed to return the platform's cash share
+  },
   aadhaarUidaiMode: false, // false = checksum validation (demo), true = UIDAI offline-KYC
   driverDocs: {
     aadhaar: true,
@@ -678,6 +684,7 @@ export async function getComplianceConfig() {
     if (stored[key] !== undefined) cfg[key] = stored[key];
   }
   cfg.grievanceOfficer = { ...COMPLIANCE_DEFAULTS.grievanceOfficer, ...(stored.grievanceOfficer || {}) };
+  cfg.cashSettlement = { ...COMPLIANCE_DEFAULTS.cashSettlement, ...(stored.cashSettlement || {}) };
   return cfg;
 }
 
@@ -705,9 +712,14 @@ export async function saveComplianceConfig(input = {}) {
     phone: typeof go.phone === 'string' ? go.phone.trim() : '',
     address: typeof go.address === 'string' ? go.address.trim() : '',
   };
+  const cs = input.cashSettlement || {};
+  clean.cashSettlement = {
+    overdueLimit: Number.isFinite(Number(cs.overdueLimit)) && Number(cs.overdueLimit) > 0 ? Number(cs.overdueLimit) : COMPLIANCE_DEFAULTS.cashSettlement.overdueLimit,
+    deadlineHours: Number.isFinite(Number(cs.deadlineHours)) && Number(cs.deadlineHours) > 0 ? Number(cs.deadlineHours) : COMPLIANCE_DEFAULTS.cashSettlement.deadlineHours,
+  };
   doc.compliance = clean;
   await doc.save();
-  return { ...clean, grievanceOfficer: { ...clean.grievanceOfficer } };
+  return { ...clean, grievanceOfficer: { ...clean.grievanceOfficer }, cashSettlement: { ...clean.cashSettlement } };
 }
 
 // ─── Driver Training Configuration ────────────────────────────────────────────

@@ -9,6 +9,8 @@ import Ride from '../models/Ride.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRideUpdate, clearDispatchTimer, toRideDTO, dispatchNext } from '../socket.js';
 import { getComplianceConfig, getRequiredDriverDocs } from '../services/settings.js';
+import { CashLedger } from '../models/CashLedger.js';
+import { addCashCollection, settleCashDue, cashStatus, platformShareOf } from '../services/cashSettlement.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -75,6 +77,16 @@ export default function driverRoutes(io) {
     try {
       const online = !!req.body.online;
       const location = req.body.location || req.userDoc.location;
+      if (online) {
+        const compliance = await getComplianceConfig();
+        const status = cashStatus(req.userDoc, compliance);
+        if (status.overdue) {
+          return res.status(403).json({
+            message: `You owe ₹${status.due} in cash settlements (held for ${status.overdueByHours} hrs). Please deposit the platform's cash share via UPI before going online.`,
+            cash: status,
+          });
+        }
+      }
       const driver = await User.findByIdAndUpdate(
         req.user.id,
         { isOnline: online, location },
@@ -169,6 +181,11 @@ export default function driverRoutes(io) {
       }
       if (!req.userDoc.isOnline || req.userDoc.currentRide) {
         return res.status(400).json({ message: 'You must be online with no active ride to accept' });
+      }
+      const acceptCompliance = await getComplianceConfig();
+      const acceptCash = cashStatus(req.userDoc, acceptCompliance);
+      if (acceptCash.overdue) {
+        return res.status(403).json({ message: `Cash settlement overdue (₹${acceptCash.due} for ${acceptCash.overdueByHours} hrs). Deposit via UPI before accepting rides.` });
       }
 
       applyAssignment(ride);
@@ -291,6 +308,19 @@ export default function driverRoutes(io) {
       });
       req.ride.markModified('occupants');
       await req.ride.save();
+
+      // Cash ledger: the driver has physically collected the rider's cash.
+      // They keep their net share; the platform's commission + GST is owed back.
+      const share = platformShareOf(req.ride);
+      if (share > 0) {
+        await addCashCollection({
+          driverId: req.user.id,
+          rideId: req.ride._id,
+          amount: share,
+          note: `Cash collected — driver keeps net share, platform share owed (commission + GST)`,
+        });
+      }
+
       emitRideUpdate(io, req.ride._id);
       res.json({ ride: await toRideDTO(req.ride._id) });
     } catch (err) {
@@ -322,10 +352,14 @@ export default function driverRoutes(io) {
         driverStatus: 'approved',
       }).countDocuments();
 
+      const compliance = await getComplianceConfig();
+      const cash = cashStatus(req.userDoc, compliance);
+
       res.json({
         completed,
         totals: totals[0] || { revenue: 0, count: 0 },
         online,
+        cash,
       });
     } catch (err) {
       next(err);
@@ -434,6 +468,71 @@ export default function driverRoutes(io) {
         aadhaarNumber: user.aadhaarNumber || '',
         phoneVerified: user.phoneVerified || false,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // --- Cash settlement -------------------------------------------------------
+
+  // Driver's cash ledger: how much of the platform's cash share they still owe
+  // and a history of every collection / deposit / auto-deduction.
+  router.get('/cash', async (req, res, next) => {
+    try {
+      const compliance = await getComplianceConfig();
+      const user = await User.findById(req.user.id);
+      const ledger = await CashLedger.findOne({ driver: req.user.id });
+      res.json({
+        cashDue: user.cashDue || 0,
+        cashDeposited: user.cashDeposited || 0,
+        cashPendingSince: user.cashPendingSince || null,
+        ...cashStatus(user, compliance),
+        entries: (ledger?.entries || [])
+          .slice()
+          .reverse()
+          .slice(0, 50)
+          .map((e) => ({
+            id: e._id,
+            type: e.type,
+            amount: e.amount,
+            rideId: e.rideId,
+            note: e.note,
+            createdAt: e.createdAt,
+          })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Driver deposits cash owed back to the platform via UPI.
+  router.post('/cash/deposit', requireApproved, async (req, res, next) => {
+    try {
+      const amount = Math.round(Number(req.body.amount) * 100) / 100;
+      const upiRef = String(req.body.upiRef || '').trim().slice(0, 60);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ message: 'Enter a valid deposit amount' });
+      }
+      const user = await User.findById(req.user.id);
+      const applied = Math.min(amount, user.cashDue || 0);
+      if (applied <= 0) {
+        return res.status(400).json({ message: 'You have no cash settlement pending' });
+      }
+      if (amount > applied) {
+        return res.status(400).json({ message: `Amount exceeds your pending cash due (₹${applied}). Maximum you can deposit now: ₹${applied}.` });
+      }
+      if (!upiRef) {
+        return res.status(400).json({ message: 'Enter the UPI reference (UTR) of your payment' });
+      }
+      const result = await settleCashDue({
+        driverId: req.user.id,
+        amount,
+        rideId: null,
+        source: 'deposit',
+        note: `UPI deposit · ref ${upiRef}`,
+      });
+      const full = await User.findById(req.user.id);
+      res.json({ message: `Deposit of ₹${applied} recorded. Outstanding cash due: ₹${full.cashDue}.`, ...result, cashDue: full.cashDue, cashDeposited: full.cashDeposited });
     } catch (err) {
       next(err);
     }

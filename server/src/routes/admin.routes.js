@@ -3,7 +3,9 @@ import path from 'path';
 import fs from 'fs';
 import User from '../models/User.js';
 import Ride from '../models/Ride.js';
+import { CashLedger } from '../models/CashLedger.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { toCashDTO } from '../services/cashSettlement.js';
 import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 
@@ -817,6 +819,50 @@ export default function adminRoutes() {
       res.setHeader('Content-Disposition', `attachment; filename="supertoto_trips_export_${new Date().toISOString().slice(0, 10)}.csv"`);
       res.send(csv);
     } catch (err) { next(err); }
+  });
+
+  // Cash-settlement dashboard: every driver that has collected the platform's
+  // cash share and has not yet returned it, plus platform-level totals.
+  router.get('/cash', async (_req, res, next) => {
+    try {
+      const compliance = await getComplianceConfig();
+      const drivers = await User.find({ role: 'driver', driverStatus: 'approved' })
+        .select('name phone vehicleNumber cashDue cashDeposited cashPendingSince')
+        .sort({ cashDue: -1 });
+      const rows = drivers
+        .filter((d) => (d.cashDue || 0) > 0.005)
+        .map((d) => toCashDTO(d, compliance));
+
+      const [totalDueAgg, totalSettledAgg] = await Promise.all([
+        User.aggregate([
+          { $match: { role: 'driver' } },
+          { $group: { _id: null, totalDue: { $sum: '$cashDue' }, totalCollected: { $sum: '$cashDeposited' } } },
+        ]),
+        CashLedger.aggregate([
+          { $unwind: '$entries' },
+          {
+            $group: {
+              _id: null,
+              collected: { $sum: { $cond: [{ $eq: ['$entries.type', 'cash_collected'] }, '$entries.amount', 0] } },
+              settled: { $sum: { $cond: [{ $in: ['$entries.type', ['deposit', 'auto_deduct']] }, '$entries.amount', 0] } },
+            },
+          },
+        ]),
+      ]);
+      const agg = totalDueAgg[0] || { totalDue: 0, totalCollected: 0 };
+      const ledger = totalSettledAgg[0] || { collected: 0, settled: 0 };
+      res.json({
+        cashSettlement: compliance.cashSettlement || { overdueLimit: 500, deadlineHours: 48 },
+        drivers: rows,
+        totals: {
+          outstanding: Math.round(agg.totalDue * 100) / 100,
+          totalCashCollected: Math.round(ledger.collected * 100) / 100,
+          totalCashSettled: Math.round(ledger.settled * 100) / 100,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
   });
 
   return router;

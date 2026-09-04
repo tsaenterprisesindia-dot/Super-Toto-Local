@@ -22,6 +22,12 @@ export default function DriverHome() {
   const [request, setRequest] = useState(null); // incoming ride request
   const [timeLeft, setTimeLeft] = useState(0);
   const [summary, setSummary] = useState(null);
+  const [cash, setCash] = useState(null);
+  const [depositOpen, setDepositOpen] = useState(false);
+  const [depositAmt, setDepositAmt] = useState('');
+  const [depositRef, setDepositRef] = useState('');
+  const [depBusy, setDepBusy] = useState(false);
+  const [cashMsg, setCashMsg] = useState('');
   const [driverPos, setDriverPos] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -48,10 +54,46 @@ export default function DriverHome() {
     }
   }, []);
 
+  const loadCash = useCallback(async () => {
+    try {
+      const { data } = await client.get('/driver/cash');
+      setCash(data);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const submitDeposit = async () => {
+    const amount = Math.round(Number(depositAmt) * 100) / 100;
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setCashMsg('Enter a valid deposit amount');
+      return;
+    }
+    if (!String(depositRef || '').trim()) {
+      setCashMsg('Enter the UPI reference (UTR) of your payment');
+      return;
+    }
+    setDepBusy(true);
+    setCashMsg('');
+    try {
+      const { data } = await client.post('/driver/cash/deposit', { amount, upiRef: depositRef });
+      setCashMsg(`✅ ${data.message}`);
+      setDepositAmt('');
+      setDepositRef('');
+      setDepositOpen(false);
+      await Promise.all([loadCash(), loadSummary()]);
+    } catch (e) {
+      setCashMsg(`❌ ${e.response?.data?.message || 'Deposit failed'}`);
+    } finally {
+      setDepBusy(false);
+    }
+  };
+
   useEffect(() => {
     loadActive();
     loadSummary();
-  }, [loadActive, loadSummary]);
+    loadCash();
+  }, [loadActive, loadSummary, loadCash]);
 
   useEffect(() => {
     if (!socket) return;
@@ -219,6 +261,55 @@ export default function DriverHome() {
               </div>
             </div>
 
+            {cash?.due > 0 && (
+              <div className="card mb" style={{ border: cash.overdue ? '2px solid var(--danger, #dc3545)' : '2px solid var(--brand-dark)' }}>
+                <div className="spread" style={{ marginBottom: 8 }}>
+                  <h3 style={{ margin: 0 }}>{cash.overdue ? '🚨 Cash settlement overdue' : '🧾 Cash settlement due'}</h3>
+                  <b style={{ fontSize: 26, fontWeight: 900, fontStyle: 'italic', color: cash.overdue ? '#c0392b' : 'var(--brand-dark)' }}>
+                    {formatINR(cash.due)}
+                  </b>
+                </div>
+                <p className="small muted" style={{ marginTop: 0 }}>
+                  This is the <b>platform's share</b> (commission + GST) you collected in cash on your cash-paid trips.
+                  You keep your net share; the platform's share must be returned. Paid via UPI below, or it is{' '}
+                  <b>auto-deducted from your digital (UPI/Card) earnings</b>.
+                </p>
+                {cash.overdue && (
+                  <div className="small" style={{ color: '#c0392b', fontWeight: 700, marginBottom: 8 }}>
+                    You have held {formatINR(cash.due)} for {cash.overdueByHours} hrs (limit {cash.limit !== undefined ? formatINR(cash.limit) : '₹500'} / 48h) — going online is blocked until you deposit.
+                  </div>
+                )}
+                {!cash.overdue && (
+                  <div className="small muted" style={{ marginBottom: 8 }}>
+                    Pending since {cash.cashPendingSince ? new Date(cash.cashPendingSince).toLocaleDateString() : '—'} · stay within the {cash.limit !== undefined ? formatINR(cash.limit) : '₹500'} / 48h limit to keep working.
+                  </div>
+                )}
+                <div className="spread" style={{ gap: 8 }}>
+                  <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => setDepositOpen(true)} disabled={depBusy}>
+                    💳 Deposit via UPI
+                  </button>
+                  <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => { setCash(null); loadCash(); }}>
+                    ↻ Refresh
+                  </button>
+                </div>
+                {cash.entries?.length > 0 && (
+                  <div className="stack" style={{ marginTop: 10 }}>
+                    {cash.entries.slice(0, 6).map((e) => (
+                      <div key={e.id} className="small spread" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                        <span>
+                          {e.type === 'cash_collected' ? '💰 Cash collected' : e.type === 'deposit' ? '📲 UPI deposit' : '🔁 Auto-deducted'}
+                          <span className="muted"> · {new Date(e.createdAt).toLocaleString()}</span>
+                        </span>
+                        <b style={{ color: e.type === 'cash_collected' ? '#c0392b' : 'var(--brand-dark)' }}>
+                          {e.type === 'cash_collected' ? '+' : '−'}{formatINR(e.amount)}
+                        </b>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {summary?.completed?.length > 0 && (
               <div className="card mb">
                 <h3 style={{ margin: '0 0 8px' }}>💰 Your payouts</h3>
@@ -370,6 +461,45 @@ export default function DriverHome() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={depositOpen} onClose={() => setDepositOpen(false)} title="💳 Deposit cash settlement via UPI">
+        <p className="small muted" style={{ marginTop: 0 }}>
+          Pay the platform's cash share (commission + GST you collected) using any UPI app, then enter the amount and UPI transaction reference (UTR) below.
+        </p>
+        <div className="small" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
+          <span className="spread">
+            <span>Pending cash settlement</span>
+            <b style={{ fontWeight: 900, fontStyle: 'italic', color: 'var(--brand-dark)' }}>{formatINR(cash?.due || 0)}</b>
+          </span>
+        </div>
+        <label className="muted" style={{ display: 'block', marginBottom: 4 }}>Amount (₹)</label>
+        <input
+          className="form-input"
+          type="number"
+          min="1"
+          step="0.01"
+          value={depositAmt}
+          onChange={(e) => setDepositAmt(e.target.value)}
+          placeholder={`Up to ${formatINR(cash?.due || 0)}`}
+        />
+        <label className="muted" style={{ display: 'block', margin: '10px 0 4px' }}>UPI Reference (UTR) — e.g. 4CL7XY29Z</label>
+        <input
+          className="form-input"
+          type="text"
+          value={depositRef}
+          onChange={(e) => setDepositRef(e.target.value)}
+          placeholder="Enter UPI transaction reference"
+        />
+        {cashMsg && <div className="small" style={{ margin: '10px 0 0', fontWeight: 700, color: cashMsg.startsWith('❌') ? '#c0392b' : 'var(--brand-dark)' }}>{cashMsg}</div>}
+        <div className="row" style={{ marginTop: 16 }}>
+          <button className="btn btn-ghost" onClick={() => setDepositOpen(false)} disabled={depBusy}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" onClick={submitDeposit} disabled={depBusy}>
+            {depBusy ? 'Recording…' : 'Confirm deposit'}
+          </button>
+        </div>
       </Modal>
     </>
   );

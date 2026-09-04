@@ -26,6 +26,7 @@ import AdminDrivers from './pages/admin/AdminDrivers.jsx';
 import AdminRiders from './pages/admin/AdminRiders.jsx';
 import AdminRides from './pages/admin/AdminRides.jsx';
 import AdminReports from './pages/admin/AdminReports.jsx';
+import AdminCash from './pages/admin/AdminCash.jsx';
 import AdminSettings from './pages/admin/AdminSettings.jsx';
 import AdminVehicleRates from './pages/admin/AdminVehicleRates.jsx';
 import AdminAds from './pages/admin/AdminAds.jsx';
@@ -166,6 +167,7 @@ export default function App() {
         <Route path="riders" element={<AdminRiders />} />
         <Route path="rides" element={<AdminRides />} />
         <Route path="reports" element={<AdminReports />} />
+        <Route path="cash" element={<AdminCash />} />
         <Route path="vehicle-rates" element={<AdminVehicleRates />} />
         <Route path="ads" element={<AdminAds />} />
         <Route path="safety-tips" element={<AdminSafetyTips />} />

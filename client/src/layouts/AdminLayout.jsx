@@ -8,6 +8,7 @@ const LINKS = [
   { to: '/admin/riders', label: '👤 Riders' },
   { to: '/admin/rides', label: '🚕 Rides' },
   { to: '/admin/reports', label: '💰 Reports' },
+  { to: '/admin/cash', label: '💵 Cash Settlement' },
   { to: '/admin/vehicle-rates', label: '🚗 Vehicle Rates' },
   { to: '/admin/state-fares', label: '🗺️ State Fares' },
   { to: '/admin/ads', label: '📢 Ad Manager' },

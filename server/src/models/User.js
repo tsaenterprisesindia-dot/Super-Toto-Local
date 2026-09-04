@@ -72,6 +72,11 @@ const userSchema = new mongoose.Schema(
     earnings: { type: Number, default: 0 },
     totalRides: { type: Number, default: 0 },
     currentRide: { type: mongoose.Schema.Types.ObjectId, ref: 'Ride', default: null },
+    // Cash-settlement ledger (driver): amount owed back to the platform from
+    // cash-paid rides (commission + GST share) that has not yet been deposited.
+    cashDue: { type: Number, default: 0 },
+    cashDeposited: { type: Number, default: 0 }, // lifetime settled to the platform
+    cashPendingSince: { type: Date, default: null }, // when cashDue first went above 0
 
     // Terms & Conditions
     termsAcceptedAt: { type: Date, default: null },
