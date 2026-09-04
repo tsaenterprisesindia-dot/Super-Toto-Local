@@ -1,13 +1,27 @@
 import { useEffect, useState } from 'react';
 import client from '../../api/client.js';
 import { formatINR, timeAgo } from '../../utils/geo.js';
+import { printInvoice } from '../../utils/invoicePrint.js';
 
 export default function AdminRides() {
   const [rides, setRides] = useState([]);
+  const [busyId, setBusyId] = useState(null);
 
   useEffect(() => {
     client.get('/admin/rides').then(({ data }) => setRides(data.rides)).catch(() => {});
   }, []);
+
+  const download = async (id) => {
+    setBusyId(id);
+    try {
+      const { data } = await client.get(`/rides/${id}/invoice`);
+      printInvoice(data.invoice);
+    } catch (e) {
+      alert(e.response?.data?.message || 'Could not download invoice');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="fade-in">
@@ -24,6 +38,7 @@ export default function AdminRides() {
               <th>Status</th>
               <th>Payment</th>
               <th>Method</th>
+              <th>Invoice</th>
             </tr>
           </thead>
           <tbody>
@@ -52,6 +67,16 @@ export default function AdminRides() {
                   </span>
                 </td>
                 <td>{r.payment?.method || '—'}</td>
+                <td>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ padding: '4px 8px', fontSize: 12 }}
+                    disabled={busyId === r._id}
+                    onClick={() => download(r._id)}
+                  >
+                    {busyId === r._id ? '…' : '🧾 PDF'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

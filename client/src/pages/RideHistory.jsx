@@ -5,6 +5,7 @@ import Nav from '../components/Nav.jsx';
 import AdBanner from '../components/AdBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { formatINR, timeAgo, PAYMENT_METHODS } from '../utils/geo.js';
+import { printInvoice } from '../utils/invoicePrint.js';
 
 const BADGE = {
   completed: 'badge-green',
@@ -204,13 +205,34 @@ export default function RideHistory() {
                   )}
                   {['completed', 'cancelled_by_rider'].includes(r.status) && (
                     <>
-                      <button
-                        className="btn btn-ghost btn-block mt"
-                        disabled={invBusy && invId === r._id}
-                        onClick={() => loadInvoice(r._id)}
-                      >
-                        {invId === r._id && invoice ? 'Hide invoice' : invId === r._id && !invoice ? 'Loading…' : '🧾 GST invoice'}
-                      </button>
+                      <div className="spread mt">
+                        <button
+                          className="btn btn-ghost"
+                          style={{ flex: 1, marginRight: 6 }}
+                          disabled={invBusy && invId === r._id}
+                          onClick={() => loadInvoice(r._id)}
+                        >
+                          {invId === r._id && invoice ? 'Hide invoice' : invId === r._id && !invoice ? 'Loading…' : '🧾 GST invoice'}
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          style={{ flex: 1, marginLeft: 6 }}
+                          disabled={invBusy || !r._id}
+                          onClick={async () => {
+                            setInvBusy(true);
+                            try {
+                              const { data } = await client.get(`/rides/${r._id}/invoice`);
+                              printInvoice(data.invoice);
+                            } catch (e) {
+                              alert(e.response?.data?.message || 'Could not download invoice');
+                            } finally {
+                              setInvBusy(false);
+                            }
+                          }}
+                        >
+                          ⬇️ Download / Print PDF
+                        </button>
+                      </div>
                       {invId === r._id && renderInvoice()}
                     </>
                   )}
