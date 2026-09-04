@@ -23,7 +23,11 @@ export function printInvoice(invoice) {
     rows.push(row(`Surge x${b.surgeMultiplier || 1}`, formatINR((b.gross || 0) - (b.subtotal || 0))));
   }
   rows.push(row('Subtotal', formatINR(b.subtotal)));
-  rows.push(row(invoice.gstTitle || 'GST', formatINR(b.gst)));
+  if (invoice.gstTitle) rows.push(row(invoice.gstTitle, ''));
+  if ((invoice.supply?.cgst || 0) > 0) rows.push(row('CGST (2.5%)', formatINR(b.cgst || invoice.supply.cgst)));
+  if ((invoice.supply?.sgst || 0) > 0) rows.push(row('SGST (2.5%)', formatINR(b.sgst || invoice.supply.sgst)));
+  if ((invoice.supply?.igst || 0) > 0) rows.push(row('IGST (5%)', formatINR(b.igst || invoice.supply.igst)));
+  rows.push(row('Total GST', formatINR(b.gst)));
   rows.push(row('Grand total', formatINR((b.gross || 0) + (b.gst || 0)), true));
   if (invoice.billed && invoice.billed !== (b.gross || 0) + (b.gst || 0)) {
     rows.push(row(invoice.item === 'Cancellation fee' ? 'Cancellation fee' : 'Amount paid', formatINR(invoice.billed)));
@@ -53,8 +57,10 @@ export function printInvoice(invoice) {
     <div>
       <h1>GST Invoice</h1>
       <div class="muted">${esc(invoice.issuer?.name)}</div>
-      <div class="muted">GSTIN: ${esc(invoice.issuer?.gstin)}</div>
-      <div class="muted">Insurance Policy: ${esc(invoice.issuer?.insurancePolicyNo)}</div>
+      <div class="muted">GSTIN: ${esc(invoice.issuer?.gstin || '—')}</div>
+      <div class="muted">Place of supply: ${esc(invoice.trip?.placeOfSupply || '—')} · SAC ${esc(invoice.supply?.sac || '9964')}</div>
+      <div class="muted">Registered state: ${esc(invoice.issuer?.state || '—')}</div>
+      <div class="muted">Insurance Policy: ${esc(invoice.issuer?.insurancePolicyNo || '—')}</div>
     </div>
     <div style="text-align:right">
       <span class="badge">${esc(invoice.invoiceNo)}</span>
@@ -71,6 +77,7 @@ export function printInvoice(invoice) {
     ${rows.join('')}
   </div>
   ${invoice.passengerInsurance ? `<div class="muted" style="margin-top:10px">🛡️ ${esc(invoice.passengerInsurance)}</div>` : ''}
+  ${invoice.complianceNote ? `<div class="muted" style="margin-top:8px;font-style:italic">${esc(invoice.complianceNote)}</div>` : ''}
   <div class="foot">This is a system-generated invoice. Trip ID: ${esc(invoice.trip?.id)}</div>
   <script>window.onload = function () { setTimeout(function () { window.print(); }, 350); };</script>
 </body></html>`);

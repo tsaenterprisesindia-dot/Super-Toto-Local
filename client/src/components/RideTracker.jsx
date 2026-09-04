@@ -284,9 +284,26 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
                 <b>{fb.surge > 1 ? <span className="badge badge-red">×{fb.surge}</span> : <span className="badge badge-green">×1.0</span>}</b>
               </div>
               <div className="spread">
-                <span className="muted">{t('tracker.gst')}</span>
+                <span className="muted">GST (5%)</span>
                 <b>{formatINR(fb.gst)}</b>
               </div>
+              {fb.supplyType === 'inter' ? (
+                <div className="spread">
+                  <span className="muted">IGST (5%)</span>
+                  <b>{formatINR(fb.igst || fb.gst)}</b>
+                </div>
+              ) : (
+                <>
+                  <div className="spread">
+                    <span className="muted">CGST (2.5%)</span>
+                    <b>{formatINR(fb.cgst || 0)}</b>
+                  </div>
+                  <div className="spread">
+                    <span className="muted">SGST (2.5%)</span>
+                    <b>{formatINR(fb.sgst || 0)}</b>
+                  </div>
+                </>
+              )}
               {seatsEnabled && seatsTotal > 1 && (
                 <div className="spread">
                   <span className="muted">{t('tracker.tripTotalAll', { count: seatsTotal })}</span>

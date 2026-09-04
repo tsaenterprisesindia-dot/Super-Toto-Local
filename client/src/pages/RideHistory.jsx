@@ -106,8 +106,12 @@ export default function RideHistory() {
         </div>
         <div className="small muted">
           {invoice.issuer?.name} · GSTIN: {invoice.issuer?.gstin}
+          {invoice.issuer?.state ? ` · ${invoice.issuer.state}` : ''}
           {invoice.issuer?.insurancePolicyNo ? ` · Policy: ${invoice.issuer.insurancePolicyNo}` : ''}
         </div>
+        {invoice.supply && (
+          <div className="small muted">Place of supply: {invoice.trip?.placeOfSupply || '—'} · SAC {invoice.supply.sac}</div>
+        )}
         <div className="small">
           {invoice.trip?.pickup} → {invoice.trip?.drop} · {invoice.trip?.distanceKm} km · ~{invoice.trip?.durationMin} min
         </div>
@@ -118,11 +122,18 @@ export default function RideHistory() {
           {b.luggage > 0 && invRow('Luggage', b.luggage)}
           {invoice.trip?.status !== 'cancelled_by_rider' && b.gross - b.subtotal > 0 && invRow(`Surge ×${b.surgeMultiplier}`, b.gross - b.subtotal)}
           {invRow('Subtotal', b.subtotal)}
-          {invRow(invoice.gstTitle || 'GST', b.gst)}
+          {invoice.gstTitle && <div className="small muted" style={{ marginTop: 4 }}>{invoice.gstTitle}</div>}
+          {(invoice.supply?.cgst > 0) && invRow('CGST (2.5%)', b.cgst)}
+          {(invoice.supply?.sgst > 0) && invRow('SGST (2.5%)', b.sgst)}
+          {(invoice.supply?.igst > 0) && invRow('IGST (5%)', b.igst)}
+          {invRow('Total GST', b.gst)}
           {invRow('Grand total', b.gross + b.gst, true)}
         </div>
         {invoice.passengerInsurance && (
           <div className="small muted mt">🛡️ {invoice.passengerInsurance}</div>
+        )}
+        {invoice.complianceNote && (
+          <div className="small muted mt" style={{ fontStyle: 'italic' }}>{invoice.complianceNote}</div>
         )}
       </div>
     );

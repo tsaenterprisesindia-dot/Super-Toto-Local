@@ -623,6 +623,7 @@ export const COMPLIANCE_DEFAULTS = {
   gstin: '',
   operatingState: 'Delhi',
   legalEntityName: 'TSA Enterprises',
+  legalAddress: '',
   surgeCap: 1.5, // state-compliant max surge multiplier
   cancellationFee: 20,
   cancellationPolicy:
@@ -683,7 +684,7 @@ export async function getComplianceConfig() {
 export async function saveComplianceConfig(input = {}) {
   const doc = (await Settings.findOne()) || new Settings();
   const clean = { ...COMPLIANCE_DEFAULTS };
-  for (const key of ['gstin', 'operatingState', 'legalEntityName', 'cancellationPolicy', 'insurancePolicyNo', 'passengerInsuranceNote']) {
+  for (const key of ['gstin', 'operatingState', 'legalEntityName', 'legalAddress', 'cancellationPolicy', 'insurancePolicyNo', 'passengerInsuranceNote']) {
     if (typeof input[key] === 'string') clean[key] = input[key].trim();
   }
   const cap = Number(input.surgeCap);

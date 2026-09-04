@@ -120,6 +120,33 @@ export function computePassengers(adults, children, cfg = PRICING) {
   return { adults: a, children: c, freeChildren, paidChildren, totalPassengers, chargedPassengers };
 }
 
+// Determine whether a trip is intra-state or inter-state for GST.
+// Compare the operator's registered state (cfg.gstState) with the trip's state
+// (cfg.tripState). Accepts either state NAME ("Delhi") or CODE ("DL") so the two
+// sides are matched after normalising to codes.
+const STATE_ALIAS = {
+  AP: 'ANDHRA PRADESH', AR: 'ARUNACHAL PRADESH', AS: 'ASSAM', BR: 'BIHAR', CG: 'CHHATTISGARH',
+  GA: 'GOA', GJ: 'GUJARAT', HR: 'HARYANA', HP: 'HIMACHAL PRADESH', JH: 'JHARKHAND', KA: 'KARNATAKA',
+  KL: 'KERALA', MP: 'MADHYA PRADESH', MH: 'MAHARASHTRA', MN: 'MANIPUR', ML: 'MEGHALAYA', MZ: 'MIZORAM',
+  NL: 'NAGALAND', OD: 'ODISHA', PB: 'PUNJAB', RJ: 'RAJASTHAN', SK: 'SIKKIM', TN: 'TAMIL NADU',
+  TS: 'TELANGANA', TR: 'TRIPURA', UP: 'UTTAR PRADESH', UK: 'UTTARAKHAND', WB: 'WEST BENGAL',
+  AN: 'ANDAMAN & NICOBAR', CH: 'CHANDIGARH', DD: 'DNH & DAMAN-DIU', DL: 'DELHI', JK: 'JAMMU & KASHMIR',
+  LA: 'LADAKH', LD: 'LAKSHADWEEP', PY: 'PUDUCHERRY',
+};
+function stateCode(v) {
+  const s = String(v || '').trim().toUpperCase();
+  if (!s) return '';
+  if (STATE_ALIAS[s]) return s; // already a code
+  const hit = Object.entries(STATE_ALIAS).find(([, name]) => name === s);
+  return hit ? hit[0] : '';
+}
+export function isIntraState(cfg = PRICING) {
+  const op = stateCode(cfg.gstState);
+  const trip = stateCode(cfg.tripState);
+  // Unknown trip state defaults to intra-state (conservative same-state assumption).
+  return !op || !trip || op === trip;
+}
+
 export function computeFare(distanceKm, durationMin, surge = 1, cfg = PRICING, luggageCharge = 0, chargedPassengers = 1) {
   const base = Math.round(cfg.base * Math.max(1, chargedPassengers));
   const distance = Math.round(distanceKm * cfg.perKm);
@@ -128,7 +155,13 @@ export function computeFare(distanceKm, durationMin, surge = 1, cfg = PRICING, l
   const raw = base + distance + time + luggage;
   const subtotal = Math.max(raw, cfg.minimum); // fare before surge & tax
   const gross = Math.round(subtotal * surge); // what the fare earns pre-tax
-  const gst = Math.round(gross * cfg.gstRate); // GST paid by the rider
+  // Automatic GST (5%) split: CGST 2.5% + SGST 2.5% (intra-state) or IGST 5% (inter-state).
+  const gstRate = cfg.gstRate || 0.05;
+  const gst = Math.round(gross * gstRate); // GST paid by the rider
+  const intra = isIntraState(cfg);
+  const cgst = intra ? Math.round(gst / 2) : 0;
+  const sgst = intra ? gst - cgst : 0; // intra-state remainder
+  const igst = intra ? 0 : gst; // inter-state
   const commission = Math.round(gross * cfg.commissionRate); // platform cut
   const driverEarnings = gross - commission; // what the driver keeps
   const total = gross + gst; // what the rider is charged (incl. GST)
@@ -142,6 +175,11 @@ export function computeFare(distanceKm, durationMin, surge = 1, cfg = PRICING, l
     subtotal,
     gross,
     gst,
+    cgst,
+    sgst,
+    igst,
+    gstRatePct: Math.round(gstRate * 100 * 100) / 100,
+    supplyType: intra ? 'intra' : 'inter',
     commission,
     driverEarnings,
     total,

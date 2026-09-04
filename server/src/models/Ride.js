@@ -49,6 +49,11 @@ const rideSchema = new mongoose.Schema(
       subtotal: { type: Number, default: 0 }, // fare before surge & tax
       gross: { type: Number, default: 0 }, // subtotal x surge
       gst: { type: Number, default: 0 }, // 5% GST collected
+      cgst: { type: Number, default: 0 }, // CGST 2.5% (intra-state)
+      sgst: { type: Number, default: 0 }, // SGST 2.5% (intra-state)
+      igst: { type: Number, default: 0 }, // IGST 5% (inter-state)
+      gstRatePct: { type: Number, default: 5 },
+      supplyType: { type: String, default: 'intra' }, // intra | inter
       commission: { type: Number, default: 0 }, // platform commission
       driverEarnings: { type: Number, default: 0 }, // gross - commission
       total: { type: Number, default: 0 },

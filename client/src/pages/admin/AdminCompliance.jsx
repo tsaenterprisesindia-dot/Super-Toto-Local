@@ -129,6 +129,7 @@ export default function AdminCompliance() {
           <h4 style={{ marginTop: 0 }}>Company & mandatory disclosures</h4>
           {field('Legal entity name', form.legalEntityName || '', set('legalEntityName'))}
           {field('GSTIN (for invoices)', form.gstin || '', set('gstin'), { placeholder: '07AAAAA0000A1Z5' })}
+          {field('Registered address', form.legalAddress || '', set('legalAddress'), { area: true, rows: 2, placeholder: 'Registered office / billing address' })}
           {field('Operating state', form.operatingState || '', set('operatingState'), { placeholder: 'e.g. Sikkim' })}
           <div className="spread">
             {field('Max surge multiplier (cap)', Number(form.surgeCap) || 1, set('surgeCap'), { type: 'number', placeholder: '1.5' })}

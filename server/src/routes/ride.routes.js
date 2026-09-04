@@ -85,6 +85,9 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   if (surgeCap > 0) surge = Math.min(surge, surgeCap);
   if (farePolicy?.cancellationFee != null) cfg.cancellationFee = farePolicy.cancellationFee;
   else if (compliance.cancellationFee != null) cfg.cancellationFee = compliance.cancellationFee;
+  // Automatic GST split: compare operator's registered state with the trip state.
+  cfg.gstState = compliance.operatingState || '';
+  cfg.tripState = effectiveState || stateForCoords(drop) || '';
   const luggageCharge = computeLuggageCharge(luggageCount, luggageHeavyCount, cfg);
   const { tripFare, perSeatFare } = computeSharedFare(distanceKm, durationMin, surge, cfg, luggageCharge, seatCount);
   const riderFare = reserved ? tripFare.total : perSeatFare * bookedSeats;

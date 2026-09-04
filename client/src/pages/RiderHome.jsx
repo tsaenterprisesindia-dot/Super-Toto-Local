@@ -516,6 +516,23 @@ export default function RiderHome() {
                         <span className="muted">{t('riderhome.gst')}</span>
                         <b>{formatINR(estimate.fare.gst)}</b>
                       </div>
+                      {estimate.fare.supplyType === 'inter' ? (
+                        <div className="spread">
+                          <span className="muted">IGST (5%)</span>
+                          <b>{formatINR(estimate.fare.igst || estimate.fare.gst)}</b>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="spread">
+                            <span className="muted">CGST (2.5%)</span>
+                            <b>{formatINR(estimate.fare.cgst || 0)}</b>
+                          </div>
+                          <div className="spread">
+                            <span className="muted">SGST (2.5%)</span>
+                            <b>{formatINR(estimate.fare.sgst || 0)}</b>
+                          </div>
+                        </>
+                      )}
                       <div className="spread">
                         <span className="muted">{seatsEnabled ? t('riderhome.tripTotalAll', { count: estimate.seatCount }) : t('riderhome.tripTotal')}</span>
                         <b>{formatINR(estimate.fare.total)}</b>
