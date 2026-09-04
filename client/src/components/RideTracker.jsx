@@ -327,8 +327,8 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
           </div>
           {!isRider && fb.driverEarnings > 0 && (
             <div className="spread mt" style={{ fontWeight: 700 }}>
-              <span className="muted">{t('tracker.youEarn', { pct: Math.round((fb.gross - fb.driverEarnings) / fb.gross * 100) })}</span>
-              <span style={{ color: 'var(--brand-dark)' }}>{formatINR(fb.driverEarnings)}</span>
+              <span className="muted" style={{ fontStyle: 'italic', fontWeight: 600 }}>{t('tracker.youEarn', { pct: Math.round((fb.gross - fb.driverEarnings) / fb.gross * 100) })}</span>
+              <span style={{ color: 'var(--brand-dark)', fontWeight: 900, fontStyle: 'italic' }}>{formatINR(fb.driverEarnings)}</span>
             </div>
           )}
           {paid && (

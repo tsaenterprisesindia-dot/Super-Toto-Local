@@ -195,10 +195,10 @@ export default function DriverHome() {
 
             <div className="stats-grid mb">
               <div className="card stat" style={{ background: 'var(--brand-light)', border: '2px solid var(--brand-dark)' }}>
-                <div className="lbl" style={{ fontWeight: 800, color: 'var(--brand-dark)' }}>
+                <div className="lbl" style={{ fontWeight: 800, color: 'var(--brand-dark)', fontStyle: 'italic' }}>
                   ✅ Your receivable (after commission)
                 </div>
-                <div className="num" style={{ color: 'var(--brand-dark)', fontSize: 30 }}>
+                <div className="num" style={{ color: 'var(--brand-dark)', fontSize: 30, fontWeight: 900, fontStyle: 'italic' }}>
                   {formatINR(summary?.totals?.revenue || 0)}
                 </div>
                 <div className="small muted">
@@ -246,8 +246,8 @@ export default function DriverHome() {
                           </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                          <div className="small muted">Net receivable</div>
-                          <b style={{ color: 'var(--brand-dark)', fontSize: 18 }}>{formatINR(net)}</b>
+                          <div className="small muted" style={{ fontStyle: 'italic', fontWeight: 600 }}>Net receivable</div>
+                          <b style={{ color: 'var(--brand-dark)', fontSize: 18, fontWeight: 900, fontStyle: 'italic' }}>{formatINR(net)}</b>
                         </div>
                       </div>
                     );
@@ -353,8 +353,8 @@ export default function DriverHome() {
                 </div>
               )}
               <div className="spread">
-                <span className="muted">You earn (after commission)</span>
-                <b>{formatINR(request.fareBreakup?.driverEarnings)}</b>
+                <span className="muted" style={{ fontStyle: 'italic', fontWeight: 600 }}>You earn (after commission)</span>
+                <b style={{ color: 'var(--brand-dark)', fontSize: 20, fontWeight: 900, fontStyle: 'italic' }}>{formatINR(request.fareBreakup?.driverEarnings)}</b>
               </div>
               <div className="small muted">
                 Rider: {request.rider?.name} {request.rider?.phone ? `· ${request.rider.phone}` : ''}
