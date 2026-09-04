@@ -194,11 +194,16 @@ export default function DriverHome() {
             </div>
 
             <div className="stats-grid mb">
-              <div className="card stat">
-                <div className="num" style={{ color: 'var(--brand-dark)' }}>
+              <div className="card stat" style={{ background: 'var(--brand-light)', border: '2px solid var(--brand-dark)' }}>
+                <div className="lbl" style={{ fontWeight: 800, color: 'var(--brand-dark)' }}>
+                  ✅ Your receivable (after commission)
+                </div>
+                <div className="num" style={{ color: 'var(--brand-dark)', fontSize: 30 }}>
                   {formatINR(summary?.totals?.revenue || 0)}
                 </div>
-                <div className="lbl">Net earnings (after commission)</div>
+                <div className="small muted">
+                  This is the exact amount you receive · platform commission is already deducted.
+                </div>
               </div>
               <div className="card stat">
                 <div className="num">{summary?.totals?.count || 0}</div>
@@ -213,6 +218,43 @@ export default function DriverHome() {
                 <div className="lbl">Drivers online now</div>
               </div>
             </div>
+
+            {summary?.completed?.length > 0 && (
+              <div className="card mb">
+                <h3 style={{ margin: '0 0 8px' }}>💰 Your payouts</h3>
+                <p className="small muted" style={{ marginTop: 0 }}>
+                  Amount owed to you for each completed trip (gross fare − platform commission).
+                </p>
+                <div className="stack">
+                  {summary.completed.map((t) => {
+                    const fb = t.fareBreakup || {};
+                    const gross = fb.gross || t.fare || 0;
+                    const commission = fb.commission || Math.max(0, gross - (fb.driverEarnings || 0));
+                    const net = fb.driverEarnings || 0;
+                    return (
+                      <div
+                        key={t._id}
+                        className="spread"
+                        style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', background: 'var(--bg)' }}
+                      >
+                        <div>
+                          <div className="small">
+                            {t.pickup?.name} → {t.drop?.name}
+                          </div>
+                          <div className="small muted">
+                            {t.distanceKm} km · gross {formatINR(gross)} − commission {formatINR(commission)}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div className="small muted">Net receivable</div>
+                          <b style={{ color: 'var(--brand-dark)', fontSize: 18 }}>{formatINR(net)}</b>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <Link to="/driver/documents" className="btn btn-ghost btn-block mb" style={{ textAlign: 'center' }}>
               📄 View / Upload Documents
