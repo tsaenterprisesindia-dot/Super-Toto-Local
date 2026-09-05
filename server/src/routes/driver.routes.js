@@ -9,6 +9,7 @@ import Ride from '../models/Ride.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRideUpdate, clearDispatchTimer, toRideDTO, dispatchNext } from '../socket.js';
 import { getComplianceConfig, getRequiredDriverDocs } from '../services/settings.js';
+import { faceMatch } from '../utils/pricing.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { addCashCollection, settleCashDue, cashStatus, maybeSendCashReminder, platformShareOf } from '../services/cashSettlement.js';
 
@@ -167,7 +168,13 @@ export default function driverRoutes(io) {
             o.fare = perSeat * (o.seats || 1);
             if (o.payment?.status === 'pending') o.payment.amount = o.fare;
           });
+          // Promo discount stays with the ride creator after re-pricing.
+          const promoDisc = ride.fareBreakup?.promoDiscount || 0;
           const creatorOcc = ride.occupants.find((o) => String(o.rider) === String(ride.rider));
+          if (creatorOcc && promoDisc > 0) {
+            creatorOcc.fare = Math.max(0, creatorOcc.fare - promoDisc);
+            if (creatorOcc.payment?.status === 'pending') creatorOcc.payment.amount = creatorOcc.fare;
+          }
           ride.fare = creatorOcc ? creatorOcc.fare : ride.fare;
           if (ride.payment.status === 'pending') ride.payment.amount = ride.fare;
           ride.markModified('occupants');
@@ -247,10 +254,57 @@ export default function driverRoutes(io) {
     }
   });
 
+  // Per-trip identity verification: the driver's live selfie must match the
+  // face enrolled at registration before they can start the trip.
+  router.post('/verify-face/:id', requireApproved, assignedRide, async (req, res, next) => {
+    try {
+      const { descriptor } = req.body;
+      if (!Array.isArray(descriptor) || descriptor.length !== 128) {
+        return res.status(400).json({ message: 'A valid 128-dimension face descriptor is required' });
+      }
+      const user = req.userDoc;
+      if (!user.faceRegistered || !user.faceDescriptor?.length) {
+        return res.status(409).json({
+          message: 'No face enrolled for this account. Enroll your face in Profile to use verified trips.',
+        });
+      }
+      if (!['assigned', 'driver_arrived'].includes(req.ride.status)) {
+        return res.status(400).json({ message: `Ride is ${req.ride.status}` });
+      }
+      const { distance, matched } = faceMatch(user.faceDescriptor, descriptor);
+      if (!matched) {
+        return res.status(401).json({
+          message: 'Face verification failed — selfie does not match the enrolled identity',
+          distance,
+        });
+      }
+      req.ride.driverSelfieVerifiedAt = new Date();
+      await req.ride.save();
+      emitRideUpdate(io, req.ride._id);
+      res.json({
+        matched: true,
+        distance,
+        verifiedAt: req.ride.driverSelfieVerifiedAt,
+        ride: await toRideDTO(req.ride._id),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post('/start/:id', requireApproved, assignedRide, async (req, res, next) => {
     try {
       if (!['assigned', 'driver_arrived'].includes(req.ride.status)) {
         return res.status(400).json({ message: `Ride is ${req.ride.status}` });
+      }
+      // Identity check: drivers with an enrolled face must verify with a live
+      // selfie before starting each trip.
+      const enrolled = req.userDoc?.faceRegistered && req.userDoc?.faceDescriptor?.length;
+      if (enrolled && !req.ride.driverSelfieVerifiedAt) {
+        return res.status(400).json({
+          code: 'FACE_VERIFICATION_REQUIRED',
+          message: 'Verify your identity with a selfie before starting this trip',
+        });
       }
       req.ride.status = 'in_progress';
       req.ride.startedAt = new Date();

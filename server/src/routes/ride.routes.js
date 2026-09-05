@@ -12,6 +12,7 @@ import {
 } from '../utils/pricing.js';
 import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
 import { settleCashDue } from '../services/cashSettlement.js';
+import { validatePromo, computePromoDiscount, redeemPromo, recordRedemption } from '../services/promo.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
 import { buildGstInvoice } from '../utils/invoice.js';
@@ -22,7 +23,7 @@ import {
   toRideDTO,
 } from '../socket.js';
 
-const PAYMENT_METHODS = ['UPI', 'Cash', 'Card'];
+const PAYMENT_METHODS = ['UPI', 'Cash', 'Card', 'Wallet'];
 const ACTIVE_RIDER_STATUSES = ['requested', 'assigned', 'driver_arrived', 'in_progress'];
 
 async function surgeContext() {
@@ -142,11 +143,23 @@ export default function rideRoutes(io) {
 
   router.post('/estimate', async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
       const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state });
+
+      let promoInfo = null;
+      if (promo) {
+        const v = await validatePromo({ code: promo, baseFare: c.riderFare, userId: req.user.id });
+        if (v.ok) {
+          const discount = computePromoDiscount(v.promo, c.riderFare);
+          promoInfo = { code: v.promo.code, discount, description: v.promo.description };
+        } else {
+          promoInfo = { code: String(promo).trim().toUpperCase(), error: v.message };
+        }
+      }
+
       if (c.distanceKm < c.cfg.minRideDistanceKm || c.distanceKm > c.cfg.maxRideDistanceKm) {
         return res.json({
           distanceKm: +c.distanceKm.toFixed(2),
@@ -160,6 +173,7 @@ export default function rideRoutes(io) {
             : `Maximum ride distance is ${c.cfg.maxRideDistanceKm} km`,
         });
       }
+      const discount = promoInfo?.discount || 0;
       res.json({
         distanceKm: +c.distanceKm.toFixed(2),
         durationMin: c.durationMin,
@@ -167,7 +181,10 @@ export default function rideRoutes(io) {
         perSeatFare: c.perSeatFare,
         seatCount: c.seatCount,
         seats: c.bookedSeats,
-        riderTotal: c.riderFare,
+        riderTotal: Math.max(0, c.riderFare - discount),
+        riderTotalBeforePromo: c.riderFare,
+        promoDiscount: discount,
+        promo: promoInfo,
         seatsEnabled: c.seatsEnabled,
         seatMode: c.seatMode,
         reserved: c.reserved,
@@ -189,7 +206,7 @@ export default function rideRoutes(io) {
   // Rider requests a toto (books seats on a shared trip)
   router.post('/', requireRole('rider'), async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
@@ -208,6 +225,14 @@ export default function rideRoutes(io) {
       if (c.distanceKm > c.cfg.maxRideDistanceKm) {
         return res.status(400).json({ message: `Maximum ride distance is ${c.cfg.maxRideDistanceKm} km` });
       }
+
+      let redeemed = null;
+      if (promo) {
+        redeemed = await redeemPromo({ code: promo, baseFare: c.riderFare, userId: req.user.id });
+        if (!redeemed.ok) return res.status(400).json({ message: redeemed.message });
+      }
+      const discount = redeemed ? redeemed.discount : 0;
+      const payable = Math.max(0, c.riderFare - discount);
 
       const ride = await Ride.create({
         rider: req.user.id,
@@ -232,19 +257,22 @@ export default function rideRoutes(io) {
           totalPassengers: c.bookedSeats,
           chargedPassengers: c.bookedSeats,
         },
-        fare: c.riderFare,
-        fareBreakup: { ...c.tripFare, tripTotal: c.tripFare.total, perSeatFare: c.perSeatFare, seatMode: c.seatMode },
+        fare: payable,
+        fareBreakup: { ...c.tripFare, tripTotal: c.tripFare.total, perSeatFare: c.perSeatFare, seatMode: c.seatMode, promoDiscount: discount },
+        promo: discount > 0 ? { code: redeemed.promo.code, description: redeemed.promo.description, discount, appliedAt: new Date() } : undefined,
         shared: { enabled: c.seatsEnabled, mode: c.seatMode, seatCount: c.seatCount, reserved: c.reserved, seatsTaken: c.bookedSeats, perSeatFare: c.perSeatFare, availableSeats: c.availableSeats },
         occupants: [
           {
             rider: req.user.id,
             seats: c.bookedSeats,
-            fare: c.riderFare,
-            payment: { status: 'pending', amount: c.riderFare },
+            fare: payable,
+            payment: { status: 'pending', amount: payable },
           },
         ],
         status: 'requested',
       });
+
+      if (discount > 0) await recordRedemption(redeemed.promo, req.user.id);
 
       void dispatchRideRequest(io, ride._id);
       const dto = await toRideDTO(ride._id);
@@ -257,7 +285,7 @@ export default function rideRoutes(io) {
   // Rider reserves seats on a shared trip (no dispatch)
   router.post('/reserve', requireRole('rider'), async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
@@ -276,6 +304,14 @@ export default function rideRoutes(io) {
       if (c.distanceKm > c.cfg.maxRideDistanceKm) {
         return res.status(400).json({ message: `Maximum ride distance is ${c.cfg.maxRideDistanceKm} km` });
       }
+
+      let redeemed = null;
+      if (promo) {
+        redeemed = await redeemPromo({ code: promo, baseFare: c.riderFare, userId: req.user.id });
+        if (!redeemed.ok) return res.status(400).json({ message: redeemed.message });
+      }
+      const discount = redeemed ? redeemed.discount : 0;
+      const payable = Math.max(0, c.riderFare - discount);
 
       const ride = await Ride.create({
         rider: req.user.id,
@@ -300,20 +336,23 @@ export default function rideRoutes(io) {
           totalPassengers: c.bookedSeats,
           chargedPassengers: c.bookedSeats,
         },
-        fare: c.riderFare,
-        fareBreakup: { ...c.tripFare, tripTotal: c.tripFare.total, perSeatFare: c.perSeatFare, seatMode: c.seatMode },
+        fare: payable,
+        fareBreakup: { ...c.tripFare, tripTotal: c.tripFare.total, perSeatFare: c.perSeatFare, seatMode: c.seatMode, promoDiscount: discount },
+        promo: discount > 0 ? { code: redeemed.promo.code, description: redeemed.promo.description, discount, appliedAt: new Date() } : undefined,
         shared: { enabled: c.seatsEnabled, mode: c.seatMode, seatCount: c.seatCount, reserved: c.reserved, seatsTaken: c.bookedSeats, perSeatFare: c.perSeatFare, availableSeats: c.availableSeats },
         occupants: [
           {
             rider: req.user.id,
             seats: c.bookedSeats,
-            fare: c.riderFare,
-            payment: { status: 'pending', amount: c.riderFare },
+            fare: payable,
+            payment: { status: 'pending', amount: payable },
           },
         ],
         status: 'reserved',
         reservedAt: new Date(),
       });
+
+      if (discount > 0) await recordRedemption(redeemed.promo, req.user.id);
 
       const dto = await toRideDTO(ride._id);
       res.status(201).json({ ride: dto });
@@ -586,6 +625,22 @@ export default function rideRoutes(io) {
       }
 
       const amount = occ ? occ.fare : isFeePayment ? ride.cancellationFee : ride.fare;
+      if (method === 'Wallet') {
+        const bal = req.userDoc?.wallet?.balance || 0;
+        if (bal < amount) {
+          return res.status(400).json({
+            message: `Insufficient wallet balance (${`₹${bal.toLocaleString('en-IN')}`}). Please top up your wallet and try again.`,
+          });
+        }
+        req.userDoc.wallet.balance = Math.round((bal - amount) * 100) / 100;
+        req.userDoc.wallet.transactions.push({
+          type: 'payment',
+          amount,
+          note: isFeePayment ? `Cancellation fee · ride ${ride._id}` : `Trip payment · ride ${ride._id}`,
+          at: new Date(),
+        });
+        await req.userDoc.save();
+      }
       const pay = {
         method,
         amount,

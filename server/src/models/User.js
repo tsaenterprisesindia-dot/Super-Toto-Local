@@ -79,6 +79,19 @@ const userSchema = new mongoose.Schema(
     cashPendingSince: { type: Date, default: null }, // when cashDue first went above 0
     cashReminderSentAt: { type: Date, default: null }, // when the deadline-approaching SMS reminder was (simulatedly) sent
 
+    // Rider wallet (prepaid balance used to pay for trips)
+    wallet: {
+      balance: { type: Number, default: 0 },
+      transactions: [
+        {
+          type: { type: String, enum: ['recharge', 'payment', 'refund'], default: 'recharge' },
+          amount: { type: Number, default: 0 },
+          note: { type: String, default: '' },
+          at: { type: Date, default: Date.now },
+        },
+      ],
+    },
+
     // Terms & Conditions
     termsAcceptedAt: { type: Date, default: null },
     termsVersion: { type: String, default: '' },

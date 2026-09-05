@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import User from './models/User.js';
 import Ride from './models/Ride.js';
+import { Promo } from './models/Promo.js';
 import { connectDB, stopDB } from './config/db.js';
 import { computeFare, haversineKm, estimate } from './utils/pricing.js';
 
@@ -174,6 +175,21 @@ async function seedDatabase() {
 
   const revenue = rides.reduce((sum, r) => sum + r.fareBreakup.driverEarnings, 0);
   await User.findByIdAndUpdate(driver1._id, { earnings: revenue, totalRides: rides.length });
+
+  // Demo promo code so the promo engine is usable out of the box (10% off, up to ₹30)
+  await Promo.create({
+    code: 'WELCOME10',
+    type: 'pct',
+    value: 10,
+    maxDiscount: 30,
+    minFare: 0,
+    description: '10% off your next trip (up to ₹30)',
+    active: true,
+    validFrom: new Date(Date.now() - 86400000),
+    validUntil: new Date(Date.now() + 365 * 86400000),
+    usageLimit: null,
+    perUserLimit: 5,
+  });
 
   return { admin, rider, driver1, driver2, driver3, rides };
 }

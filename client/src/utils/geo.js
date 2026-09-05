@@ -41,6 +41,7 @@ export const PAYMENT_METHODS = [
   { id: 'UPI', label: 'UPI', icon: '📱' },
   { id: 'Cash', label: 'Cash', icon: '💵' },
   { id: 'Card', label: 'Card', icon: '💳' },
+  { id: 'Wallet', label: 'Wallet', icon: '💼' },
 ];
 
 export function formatTime(d) {

@@ -6,6 +6,8 @@ import MapView from './MapView.jsx';
 import AdBanner from './AdBanner.jsx';
 import AdInterstitial from './AdInterstitial.jsx';
 import Modal from './Modal.jsx';
+import FaceVerifyModal from './FaceVerifyModal.jsx';
+import { useFace } from '../context/FaceProvider.jsx';
 import { STATUS_LABELS, formatINR, formatTime, PAYMENT_METHODS } from '../utils/geo.js';
 
 const STEPS = [
@@ -39,6 +41,7 @@ function StarPicker({ value, onChange, disabled }) {
 
 export default function RideTracker({ ride, role, driverPos, setRide, socket }) {
   const { t } = useTranslation();
+  const face = useFace();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [rating, setRating] = useState(0);
@@ -50,6 +53,8 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
   const [upiCfg, setUpiCfg] = useState({ upiId: '', merchantName: 'Super Toto Local', enabled: true, showQr: true });
   const [upiPaid, setUpiPaid] = useState(false);
   const [seatCfg, setSeatCfg] = useState({ mode: 'shared' });
+  const [wallet, setWallet] = useState(null);
+  const [verifyOpen, setVerifyOpen] = useState(false);
 
   // SOS + live trip sharing
   const [sosOpen, setSosOpen] = useState(false);
@@ -95,6 +100,9 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
     client.get('/ads-config').then(({ data }) => setAdsCfg(data.adsConfig || {})).catch(() => {});
     client.get('/upi-config').then(({ data }) => setUpiCfg(data.upiConfig || {})).catch(() => {});
     client.get('/seat-booking-config').then(({ data }) => setSeatCfg(data.seatBookingConfig || { mode: 'shared' })).catch(() => {});
+    if (isRider) {
+      client.get('/rider/wallet').then(({ data }) => setWallet(data)).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -121,7 +129,15 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
     }
   };
 
-  const pay = () => act(() => client.post(`/rides/${ride._id}/pay`, { method }));
+  const pay = () =>
+    act(
+      () => client.post(`/rides/${ride._id}/pay`, { method }),
+      () => {
+        if (method === 'Wallet') {
+          client.get('/rider/wallet').then(({ data }) => setWallet(data)).catch(() => {});
+        }
+      }
+    );
   const settleCash = () => act(() => client.post(`/driver/settle/${ride._id}`));
   const rate = () =>
     act(() => client.post(`/rides/${ride._id}/rate`, { rating, ratedRole: isRider ? 'driver' : 'rider' }));
@@ -391,6 +407,12 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
                   <b>{formatINR(fb.total)}</b>
                 </div>
               )}
+              {fb.promoDiscount > 0 && (
+                <div className="spread">
+                  <span className="muted" style={{ color: 'var(--green)' }}>{t('tracker.promoApplied')}{ride.promo?.code ? ` (${ride.promo.code})` : ''}</span>
+                  <b style={{ color: 'var(--green)' }}>−{formatINR(fb.promoDiscount)}</b>
+                </div>
+              )}
               <hr style={{ border: 'none', borderTop: '1px dashed var(--line)', margin: '10px 0' }} />
             </>
           )}
@@ -529,6 +551,24 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
               </button>
             )}
 
+            {method === 'Wallet' && (
+              <div>
+                <div className="small" style={{ marginBottom: 10 }}>
+                  <b>{t('tracker.walletBalance')}</b>{' '}
+                  {wallet ? formatINR(wallet.balance) : '…'}
+                </div>
+                {(wallet ?? { balance: 0 }).balance >= myFare ? (
+                  <button className="btn btn-primary btn-block btn-lg" disabled={busy} onClick={pay}>
+                    {t('tracker.payWallet', { amount: formatINR(myFare) })}
+                  </button>
+                ) : (
+                  <div className="err-box" style={{ marginBottom: 10 }}>
+                    {t('tracker.walletLow', { short: formatINR(myFare - (wallet?.balance || 0)) })}
+                  </div>
+                )}
+              </div>
+            )}
+
             <p className="small muted" style={{ marginBottom: 0 }}>
               {method === 'Cash'
                 ? t('tracker.cashHint')
@@ -646,13 +686,27 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
           </button>
         )}
         {!isRider && ride.status === 'driver_arrived' && (
-          <button
-            className="btn btn-primary btn-block btn-lg"
-            disabled={busy}
-            onClick={() => act(() => client.post(`/driver/start/${ride._id}`))}
-          >
-            {t('tracker.startTrip')}
-          </button>
+          <div>
+            {face.faceRegistered && !ride.driverSelfieVerifiedAt && (
+              <button
+                className="btn btn-amber btn-block btn-lg"
+                style={{ marginBottom: 10 }}
+                disabled={busy}
+                onClick={() => setVerifyOpen(true)}
+              >
+                {t('tracker.verifyFaceCta')}
+              </button>
+            )}
+            <button
+              className="btn btn-primary btn-block btn-lg"
+              disabled={busy || (face.faceRegistered && !ride.driverSelfieVerifiedAt)}
+              onClick={() => act(() => client.post(`/driver/start/${ride._id}`))}
+            >
+              {face.faceRegistered && !ride.driverSelfieVerifiedAt
+                ? t('tracker.startLocked')
+                : t('tracker.startTrip')}
+            </button>
+          </div>
         )}
         {!isRider && ride.status === 'in_progress' && (
           <button
@@ -729,6 +783,16 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
           )}
         </Modal>
       )}
+      <FaceVerifyModal
+        open={verifyOpen}
+        onClose={() => { setVerifyOpen(false); setErr(''); }}
+        onVerified={(data) => {
+          setRide(data.ride || data);
+          setVerifyOpen(false);
+        }}
+        apiFactory={(descriptor) => client.post(`/driver/verify-face/${ride._id}`, { descriptor })}
+        title={t('tracker.verifyFaceTitle')}
+      />
       <AdBanner />
       <AdInterstitial visible={showInterstitial} onClose={() => setShowInterstitial(false)} />
     </div>

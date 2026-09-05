@@ -4,6 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import fs from 'fs';
 import User from '../models/User.js';
+import { SavedPlace } from '../models/SavedPlace.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -95,6 +96,92 @@ export default function riderRoutes() {
         phoneVerified: user.phoneVerified || false,
         aadhaarVerified: user.aadhaarVerified || false,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Rider wallet — prepaid balance used to pay for trips
+  router.get('/wallet', async (req, res, next) => {
+    try {
+      const user = req.userDoc;
+      res.json({
+        balance: Math.round((user.wallet?.balance || 0) * 100) / 100,
+        transactions: (user.wallet?.transactions || []).slice().reverse(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Mock top-up: in production this would go through a payment gateway.
+  router.post('/wallet/recharge', async (req, res, next) => {
+    try {
+      const amount = Math.round(Number(req.body.amount));
+      if (!amount || amount <= 0) return res.status(400).json({ message: 'Enter a valid top-up amount' });
+      if (amount > 100000) return res.status(400).json({ message: 'Maximum single top-up is ₹1,00,000' });
+
+      const user = req.userDoc;
+      user.wallet = user.wallet || { balance: 0, transactions: [] };
+      user.wallet.balance = Math.round((user.wallet.balance + amount) * 100) / 100;
+      user.wallet.transactions.push({
+        type: 'recharge',
+        amount,
+        note: 'UPI top-up (demo)',
+        at: new Date(),
+      });
+      await user.save();
+      res.json({
+        message: `₹${amount.toLocaleString('en-IN')} added to your wallet`,
+        balance: Math.round(user.wallet.balance * 100) / 100,
+        transactions: user.wallet.transactions.slice().reverse(),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Saved places — rider's frequently used pickup/drop locations
+  router.get('/places', async (req, res, next) => {
+    try {
+      const places = await SavedPlace.find({ user: req.user.id }).sort('-createdAt').lean();
+      res.json({ places });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/places', async (req, res, next) => {
+    try {
+      const { label, name, lat, lng } = req.body;
+      if (lat == null || lng == null || !String(name || '').trim()) {
+        return res.status(400).json({ message: 'name, lat and lng are required' });
+      }
+      const count = await SavedPlace.countDocuments({ user: req.user.id });
+      if (count >= 20) {
+        return res.status(400).json({ message: 'You can save up to 20 places' });
+      }
+      const place = await SavedPlace.create({
+        user: req.user.id,
+        label: String(label || '').trim(),
+        name: String(name).trim(),
+        lat: Number(lat),
+        lng: Number(lng),
+      });
+      res.status(201).json({ place });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/places/:id', async (req, res, next) => {
+    try {
+      const place = await SavedPlace.findOneAndDelete({
+        _id: req.params.id,
+        user: req.user.id,
+      });
+      if (!place) return res.status(404).json({ message: 'Place not found' });
+      res.json({ message: 'Place removed' });
     } catch (err) {
       next(err);
     }

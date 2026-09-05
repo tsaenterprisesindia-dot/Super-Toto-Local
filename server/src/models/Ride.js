@@ -57,6 +57,7 @@ const rideSchema = new mongoose.Schema(
       commission: { type: Number, default: 0 }, // platform commission
       driverEarnings: { type: Number, default: 0 }, // gross - commission
       total: { type: Number, default: 0 },
+      promoDiscount: { type: Number, default: 0 },
     },
     cancellationFee: { type: Number, default: 0 }, // charged if rider cancels after a driver accepts
 
@@ -149,6 +150,17 @@ const rideSchema = new mongoose.Schema(
         Math.random().toString(36).slice(2, 6),
     },
     shareEnabled: { type: Boolean, default: false },
+
+    // Per-trip driver identity verification (selfie matched against enrolled face)
+    driverSelfieVerifiedAt: { type: Date, default: null },
+
+    // Promo code applied by the ride creator (affects only their fare)
+    promo: {
+      code: { type: String, default: '' },
+      description: { type: String, default: '' },
+      discount: { type: Number, default: 0 },
+      appliedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

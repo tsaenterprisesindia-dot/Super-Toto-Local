@@ -61,6 +61,12 @@ export default function RiderHome() {
   const [vehicleType, setVehicleType] = useState('toto');
   const [fstate, setFstate] = useState('');
   const [stateList, setStateList] = useState([]);
+  const [promo, setPromo] = useState('');
+  const [promoInfo, setPromoInfo] = useState(null);
+  const [savedPlaces, setSavedPlaces] = useState([]);
+  const [wallet, setWallet] = useState(null);
+  const [topup, setTopup] = useState('');
+  const [walletOpen, setWalletOpen] = useState(false);
 
   const [sharedTrips, setSharedTrips] = useState([]);
   const [joinSeats, setJoinSeats] = useState({});
@@ -157,22 +163,28 @@ export default function RiderHome() {
     }
     let alive = true;
     client
-      .post('/rides/estimate', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate })
+      .post('/rides/estimate', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo })
       .then(({ data }) => {
         if (!alive) return;
         setEstimate(data);
+        setPromoInfo(data.promo);
         if (data.seatCount) setSeats((s) => Math.min(s, data.seatCount));
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [pickup, drop, luggageCount, seats, vehicleType, fstate]);
+  }, [pickup, drop, luggageCount, seats, vehicleType, fstate, promo]);
 
   // Re-clamp the seat count when the vehicle type / capacity changes
   useEffect(() => {
     setSeats((s) => Math.min(Math.max(1, s), maxSeats));
   }, [maxSeats]);
+
+  useEffect(() => {
+    client.get('/rider/places').then(({ data }) => setSavedPlaces(data.places || [])).catch(() => {});
+    client.get('/rider/wallet').then(({ data }) => setWallet(data)).catch(() => {});
+  }, []);
 
   const pickDestination = (e, which) => {
     const found = DESTINATIONS.find((d) => d.name === e.target.value);
@@ -190,7 +202,7 @@ export default function RiderHome() {
     setBusy(true);
     setErr('');
     try {
-      const { data } = await client.post('/rides', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate });
+      const { data } = await client.post('/rides', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo });
       setRide(data.ride);
       refreshShared();
     } catch (e) {
@@ -205,10 +217,43 @@ export default function RiderHome() {
     setBusy(true);
     setErr('');
     try {
-      const { data } = await client.post('/rides/reserve', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate });
+      const { data } = await client.post('/rides/reserve', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo });
       setRide(data.ride);
     } catch (e) {
       setErr(e.response?.data?.message || t('riderhome.reserveError') || 'Could not reserve a ride');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savePlace = async () => {
+    if (!pickup?.lat) return;
+    const name = window.prompt(t('riderhome.savePlacePrompt'));
+    if (!name) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const { data } = await client.post('/rider/places', { label: 'custom', name, lat: pickup.lat, lng: pickup.lng });
+      setSavedPlaces((p) => [data.place, ...p]);
+      setNotice(t('riderhome.savePlaceDone', { name: data.place.name }));
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Could not save this place');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const topUp = async () => {
+    if (!Number(topup)) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const { data } = await client.post('/rider/wallet/recharge', { amount: topup });
+      setWallet({ balance: data.balance, transactions: data.transactions });
+      setTopup('');
+      setNotice(`✅ ${data.message}`);
+    } catch (e) {
+      setErr(e.response?.data?.message || 'Could not top up your wallet');
     } finally {
       setBusy(false);
     }
@@ -260,6 +305,58 @@ export default function RiderHome() {
                   ? t('riderhome.introShared')
                   : t('riderhome.introOff')}
             </p>
+
+            {wallet && (
+              <div className="card mb" style={{ background: 'var(--bg)', boxShadow: 'none' }}>
+                <button
+                  type="button"
+                  className="spread"
+                  style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit', color: 'inherit' }}
+                  onClick={() => setWalletOpen((o) => !o)}
+                >
+                  <b>💼 {t('riderhome.walletTitle')}</b>
+                  <span style={{ fontWeight: 800 }}>
+                    {formatINR(wallet.balance)} <span className="small muted">{walletOpen ? '▲' : '▼'}</span>
+                  </span>
+                </button>
+                {walletOpen && (
+                  <div className="mt">
+                    <div className="row" style={{ gap: 8 }}>
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        value={topup}
+                        onChange={(e) => setTopup(e.target.value)}
+                        placeholder={t('riderhome.topupPlaceholder')}
+                      />
+                      <button className="btn btn-primary" disabled={busy || !Number(topup)} onClick={topUp}>
+                        {t('riderhome.topupBtn')}
+                      </button>
+                    </div>
+                    <div className="small muted mt">
+                      {wallet.transactions.length === 0 ? (
+                        t('riderhome.walletEmpty')
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+                          {wallet.transactions.slice(0, 5).map((x, i) => (
+                            <div key={i} className="spread" style={{ fontSize: 12 }}>
+                              <span>
+                                {x.type === 'recharge' ? '⬆️ ' + (t('riderhome.txnRecharge') || 'Top-up') : '⬇️ ' + (t('riderhome.txnPayment') || 'Trip payment')}
+                                <span className="muted"> · {new Date(x.at).toLocaleString('en-IN')}</span>
+                              </span>
+                              <b style={{ color: x.type === 'recharge' ? 'var(--green)' : 'var(--red)' }}>
+                                {x.type === 'recharge' ? '+' : '−'}{formatINR(x.amount)}
+                              </b>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {err && <div className="alert alert-warn mb">{err}</div>}
             {notice && (
@@ -346,8 +443,33 @@ export default function RiderHome() {
                     </button>
                   </div>
 
+                  {savedPlaces.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      <span className="small muted" style={{ alignSelf: 'center' }}>{t('riderhome.savedPlaces')}</span>
+                      {savedPlaces.map((p) => (
+                        <button
+                          key={p._id}
+                          type="button"
+                          className={`chip${(settingField === 'pickup' && pickup.name === p.name) || (settingField === 'drop' && drop?.name === p.name) ? ' chip-active' : ''}`}
+                          onClick={() => {
+                            const loc = { name: p.name, lat: p.lat, lng: p.lng, isCustom: true, customAddress: p.name };
+                            if (settingField === 'pickup') setPickup(loc);
+                            else setDrop(loc);
+                          }}
+                        >
+                          📍 {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="field">
-                    <label>{t('riderhome.pickup')}</label>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>{t('riderhome.pickup')}</span>
+                      <button type="button" className="btn btn-ghost small" disabled={!pickup?.lat || busy} onClick={savePlace}>
+                        💾 {t('riderhome.savePickup')}
+                      </button>
+                    </label>
                     {pickup.isCustom ? (
                       <div className="row" style={{ gap: 6 }}>
                         <input
@@ -537,6 +659,12 @@ export default function RiderHome() {
                         <span className="muted">{seatsEnabled ? t('riderhome.tripTotalAll', { count: estimate.seatCount }) : t('riderhome.tripTotal')}</span>
                         <b>{formatINR(estimate.fare.total)}</b>
                       </div>
+                      {promoInfo?.discount > 0 && (
+                        <div className="spread">
+                          <span className="muted" style={{ color: 'var(--green)' }}>{t('riderhome.promoDiscount')}{promoInfo.code ? ` (${promoInfo.code})` : ''}</span>
+                          <b style={{ color: 'var(--green)' }}>−{formatINR(promoInfo.discount)}</b>
+                        </div>
+                      )}
                       <hr style={{ border: 'none', borderTop: '1px dashed var(--line)', margin: '10px 0' }} />
                       {reservedSeats ? (
                         <div className="spread">
@@ -581,6 +709,22 @@ export default function RiderHome() {
                       </div>
                     </div>
                   )}
+
+                  <div className="field" style={{ marginTop: 12 }}>
+                    <label>{t('riderhome.promoLabel')}</label>
+                    <input
+                      className="input"
+                      value={promo}
+                      onChange={(e) => setPromo(e.target.value.toUpperCase())}
+                      placeholder={t('riderhome.promoPlaceholder')}
+                    />
+                    {promoInfo?.error && <div className="err-box" style={{ marginTop: 8 }}>{promoInfo.error}</div>}
+                    {promoInfo?.discount > 0 && (
+                      <div className="small" style={{ color: 'var(--green)', marginTop: 8 }}>
+                        🏷️ {promoInfo.description} — {t('riderhome.promoApplied', { amount: formatINR(promoInfo.discount) })}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="row mt" style={{ gap: 8 }}>
                     <button

@@ -7,6 +7,7 @@ import { CashLedger } from '../models/CashLedger.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
+import { Promo } from '../models/Promo.js';
 import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 
@@ -938,6 +939,75 @@ export default function adminRoutes(io) {
         .lean();
       if (io?.to) io.to('admins').emit('sos:solved', dto);
       res.json({ event: dto });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Promo codes
+  router.get('/promos', async (_req, res, next) => {
+    try {
+      const promos = await Promo.find().sort('-createdAt').lean();
+      res.json({ promos });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/promos', async (req, res, next) => {
+    try {
+      const {
+        code, type, value, maxDiscount, minFare, description,
+        active, validFrom, validUntil, usageLimit, perUserLimit,
+      } = req.body;
+      if (!String(code || '').trim()) return res.status(400).json({ message: 'Code is required' });
+      if (!['pct', 'fixed'].includes(type)) return res.status(400).json({ message: 'Type must be pct or fixed' });
+      const numeric = Number(value);
+      if (!numeric || numeric <= 0) return res.status(400).json({ message: 'A positive value is required' });
+      try {
+        const promo = await Promo.create({
+          code,
+          type,
+          value: numeric,
+          maxDiscount: maxDiscount == null || maxDiscount === '' ? null : Number(maxDiscount),
+          minFare: minFare == null ? 0 : Number(minFare),
+          description: String(description || ''),
+          active: active === true,
+          validFrom: validFrom ? new Date(validFrom) : null,
+          validUntil: validUntil ? new Date(validUntil) : null,
+          usageLimit: usageLimit == null || usageLimit === '' ? null : Number(usageLimit),
+          perUserLimit: perUserLimit == null ? 1 : Number(perUserLimit),
+        });
+        res.status(201).json({ promo });
+      } catch (e) {
+        if (e?.code === 11000) return res.status(409).json({ message: 'A promo with this code already exists' });
+        throw e;
+      }
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.patch('/promos/:id', async (req, res, next) => {
+    try {
+      const promo = await Promo.findById(req.params.id);
+      if (!promo) return res.status(404).json({ message: 'Promo not found' });
+      const allowed = ['code', 'type', 'value', 'maxDiscount', 'minFare', 'description', 'active', 'validFrom', 'validUntil', 'usageLimit', 'perUserLimit'];
+      allowed.forEach((k) => {
+        if (req.body[k] !== undefined) promo[k] = req.body[k] === '' ? null : req.body[k];
+      });
+      await promo.save();
+      res.json({ promo });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/promos/:id', async (req, res, next) => {
+    try {
+      const promo = await Promo.findByIdAndDelete(req.params.id);
+      if (!promo) return res.status(404).json({ message: 'Promo not found' });
+      res.json({ message: 'Promo deleted' });
     } catch (err) {
       next(err);
     }
