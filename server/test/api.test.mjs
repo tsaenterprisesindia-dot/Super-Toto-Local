@@ -81,7 +81,7 @@ before(async () => {
   child = spawn(process.execPath, ['src/index.js'], {
     cwd: SERVER_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, MONGODB_URI: '', PORT: String(port), NODE_ENV: 'test' },
+    env: { ...process.env, MONGODB_URI: '', PORT: String(port), NODE_ENV: 'test', OSRM_URL: 'http://127.0.0.1:9' },
   });
   child.stdout.on('data', () => {});
   child.stderr.on('data', () => {});

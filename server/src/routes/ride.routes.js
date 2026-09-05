@@ -12,6 +12,7 @@ import {
 } from '../utils/pricing.js';
 import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
 import { settleCashDue } from '../services/cashSettlement.js';
+import { getRoute } from '../utils/route.js';
 import { validatePromo, computePromoDiscount, redeemPromo, recordRedemption } from '../services/promo.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
@@ -51,7 +52,9 @@ async function surgeContext() {
 async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode, mode }) {
   const luggageCount = Number(luggage?.count) || 0;
   const luggageHeavyCount = Number(luggage?.heavyCount) || 0;
-  const distanceKm = haversineKm(pickup, drop);
+  // Road distance from OSRM (falls back to haversine when unreachable); the
+  // resulting fare and ETA therefore reflect real roads, not straight lines.
+  const { distanceKm, durationMin: roadDurationMin } = await getRoute({ pickup, drop });
   const cfg = await getPricingConfig();
   const vtId = vehicleType || 'toto';
   let vtRates = await getVehicleRatesConfig();
@@ -89,6 +92,9 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   const bookedSeats = !seatsEnabled ? 1 : reserved ? seatCount : Math.min(requested, seatCount);
   const { activeRequests, onlineDrivers } = await surgeContext();
   const { durationMin } = estimate(distanceKm, cfg);
+  // Prefer real road duration when the router answered; otherwise derive a
+  // nominal duration from the (fallback straight-line) distance.
+  const effectiveDurationMin = roadDurationMin != null ? roadDurationMin : durationMin;
   let surge = computeSurge(activeRequests, onlineDrivers, cfg);
   // State-compliant surge cap: a state's active policy caps surge (some states
   // ban surge entirely, i.e. cap 1.0). Falls back to the global compliance cap.
@@ -101,7 +107,7 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   cfg.gstState = compliance.operatingState || '';
   cfg.tripState = effectiveState || stateForCoords(drop) || '';
   const luggageCharge = computeLuggageCharge(luggageCount, luggageHeavyCount, cfg);
-  const { tripFare, perSeatFare } = computeSharedFare(distanceKm, durationMin, surge, cfg, luggageCharge, seatCount);
+  const { tripFare, perSeatFare } = computeSharedFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, seatCount);
   const riderFare = reserved ? tripFare.total : perSeatFare * bookedSeats;
   return {
     luggageCount,
@@ -109,7 +115,7 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
     distanceKm,
     cfg,
     vtId,
-    durationMin,
+    durationMin: effectiveDurationMin,
     surge,
     luggageCharge,
     tripFare,
