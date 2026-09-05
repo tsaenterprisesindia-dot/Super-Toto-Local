@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import PasswordInput from '../components/PasswordInput.jsx';
 import OtpInput from '../components/OtpInput.jsx';
@@ -47,8 +47,9 @@ const DRIVER_TERMS = [
 export default function Register() {
   const { register, sendOtp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
-  const [role, setRole] = useState('rider');
+  const [role, setRole] = useState(searchParams.get('role') === 'driver' ? 'driver' : 'rider');
   const [form, setForm] = useState({
     name: '',
     email: '',

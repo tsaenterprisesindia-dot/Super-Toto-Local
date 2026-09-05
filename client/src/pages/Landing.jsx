@@ -38,36 +38,36 @@ export default function Landing() {
       </div>
 
       <div className="features">
-        <div className="feature">
+        <Link to={start} className="feature">
           <div className="icon">📱</div>
           <h4>{t('landing.featureBookTitle')}</h4>
           <p>{t('landing.featureBookSub')}</p>
-        </div>
-        <div className="feature">
+        </Link>
+        <Link to={start} className="feature">
           <div className="icon">🛰️</div>
           <h4>{t('landing.featureTrackTitle')}</h4>
           <p>{t('landing.featureTrackSub')}</p>
-        </div>
-        <div className="feature">
+        </Link>
+        <Link to="/register?role=driver" className="feature">
           <div className="icon">🛺</div>
           <h4>{t('landing.featureDriverTitle')}</h4>
           <p>{t('landing.featureDriverSub')}</p>
-        </div>
-        <div className="feature">
+        </Link>
+        <Link to="/login?role=admin" className="feature">
           <div className="icon">📊</div>
           <h4>{t('landing.featureAdminTitle')}</h4>
           <p>{t('landing.featureAdminSub')}</p>
-        </div>
-        <div className="feature">
+        </Link>
+        <Link to={start} className="feature">
           <div className="icon">💳</div>
           <h4>{t('landing.featurePayTitle')}</h4>
           <p>{t('landing.featurePaySub')}</p>
-        </div>
-        <div className="feature">
+        </Link>
+        <Link to={start} className="feature">
           <div className="icon">⭐</div>
           <h4>{t('landing.featureRateTitle')}</h4>
           <p>{t('landing.featureRateSub')}</p>
-        </div>
+        </Link>
       </div>
 
       <div className="demo-card" style={{ textAlign: 'center', borderTop: '1px solid var(--border)', padding: '16px 12px' }}>

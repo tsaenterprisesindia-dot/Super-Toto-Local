@@ -418,7 +418,8 @@ tr:hover td { background: #fafbfd; }
 .demo-account { background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .demo-account b { display: block; }
 .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; max-width: 900px; margin: 0 auto; padding-bottom: 60px; }
-.feature { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.feature { display: block; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px; text-decoration: none; color: inherit; transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease; }
+.feature:hover, .feature:focus-visible { border-color: var(--brand); box-shadow: 0 6px 18px rgba(20, 115, 84, 0.12); transform: translateY(-2px); outline: none; }
 .feature .icon { font-size: 26px; }
 .feature h4 { margin: 8px 0 4px; }
 .feature p { margin: 0; color: var(--muted); font-size: 14px; }
