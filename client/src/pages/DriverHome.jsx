@@ -240,14 +240,14 @@ export default function DriverHome() {
                 <span className={`badge ${isOnline ? 'badge-green' : 'badge-gray'}`}>
                   {isOnline ? '● Online' : '○ Offline'}
                 </span>
-                <label className="switch">
+                <label className="switch" data-tt="driver-online">
                   <input type="checkbox" checked={isOnline} onChange={toggleOnline} disabled={busy} />
                   <span className="slider" />
                 </label>
               </div>
             </div>
 
-            <div className="stats-grid mb">
+            <div className="stats-grid mb" data-tt="driver-stats">
               <div className="card stat" style={{ background: 'var(--brand-light)', border: '2px solid var(--brand-dark)' }}>
                 <div className="lbl" style={{ fontWeight: 800, color: 'var(--brand-dark)', fontStyle: 'italic' }}>
                   ✅ Your receivable (after commission)
@@ -378,11 +378,11 @@ export default function DriverHome() {
               </div>
             )}
 
-            <Link to="/driver/documents" className="btn btn-ghost btn-block mb" style={{ textAlign: 'center' }}>
+            <Link to="/driver/documents" data-tt="driver-docs" className="btn btn-ghost btn-block mb" style={{ textAlign: 'center' }}>
               📄 View / Upload Documents
             </Link>
 
-            <Link to="/driver/vehicle" className="btn btn-ghost btn-block mb" style={{ textAlign: 'center' }}>
+            <Link to="/driver/vehicle" data-tt="driver-vehicle" className="btn btn-ghost btn-block mb" style={{ textAlign: 'center' }}>
               🚗 Vehicle Details
             </Link>
 
@@ -486,9 +486,9 @@ export default function DriverHome() {
               <button className="btn btn-ghost btn-block" onClick={() => respond(false)} disabled={busy}>
                 Decline
               </button>
-              <button className="btn btn-primary btn-block" onClick={() => respond(true)} disabled={busy}>
-                Accept
-              </button>
+<button data-tt="driver-accept" className="btn btn-primary btn-block" onClick={() => respond(true)} disabled={busy}>
+              Accept
+            </button>
             </div>
           </div>
         )}

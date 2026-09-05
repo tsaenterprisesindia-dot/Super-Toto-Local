@@ -23,7 +23,7 @@ export default function Landing() {
         <p className="muted" style={{ marginTop: '-6px', marginBottom: '22px' }}>
           {t('common.appUnit')}
         </p>
-        <div className="hero-btns">
+        <div className="hero-btns" data-tt="landing-cta">
           <Link to={start} className="btn btn-primary btn-lg">
             {user ? t('landing.openApp') : t('landing.getStarted')}
           </Link>
@@ -37,7 +37,7 @@ export default function Landing() {
         </div>
       </div>
 
-      <div className="features">
+      <div className="features" data-tt="landing-features">
         <Link to={start} className="feature">
           <div className="icon">📱</div>
           <h4>{t('landing.featureBookTitle')}</h4>

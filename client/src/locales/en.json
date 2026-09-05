@@ -38,6 +38,22 @@
     "featureRateTitle": "Ratings",
     "featureRateSub": "Rate your driver and rider to keep the community trusted."
   },
+  "tutorial": {
+    "fab": "AI Tutorial",
+    "menuTitle": "AI video tutorial",
+    "menuSub": "Pick a full walkthrough — the AI narrator speaks, and each screen is highlighted on your screen.",
+    "steps": "steps",
+    "watched": "watched",
+    "play": "Play",
+    "stepOf": "AI narrator",
+    "end": "End",
+    "pause": "Pause",
+    "resume": "Resume",
+    "next": "Next",
+    "prev": "Previous",
+    "mutedOn": "Mute",
+    "mutedOff": "Unmute"
+  },
   "login": {
     "title": "Log in to continue",
     "tabPassword": "Password",

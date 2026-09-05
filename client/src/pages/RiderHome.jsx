@@ -447,7 +447,7 @@ export default function RiderHome() {
                     )}
                   </div>
 
-                  <div className="chip-row" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <div className="chip-row" data-tt="rider-route" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                     <button
                       className={`chip${settingField === 'pickup' ? ' chip-active' : ''}`}
                       onClick={() => setSettingField('pickup')}
@@ -618,7 +618,7 @@ export default function RiderHome() {
                   </div>
 
                   {estimate ? (
-                    <div className="card mt" style={{ background: 'var(--bg)', boxShadow: 'none' }}>
+                    <div className="card mt" data-tt="rider-fare" style={{ background: 'var(--bg)', boxShadow: 'none' }}>
                       {estimate.distanceError ? (
                         <div className="alert alert-warn mb" style={{ marginTop: 0 }}>
                           ⚠️ {estimate.distanceError}
@@ -766,7 +766,7 @@ export default function RiderHome() {
                     </div>
                   )}
 
-                  <div className="row mt" style={{ gap: 8 }}>
+                  <div className="row mt" data-tt="rider-actions" style={{ gap: 8 }}>
                     <button
                       className="btn btn-ghost btn-lg"
                       style={{ flex: 1 }}
@@ -777,6 +777,7 @@ export default function RiderHome() {
                     </button>
                     <button
                       className="btn btn-primary btn-lg"
+                      data-tt="rider-book"
                       style={{ flex: 1 }}
                       disabled={!drop || busy || estimate?.distanceError}
                       onClick={requestRide}

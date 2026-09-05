@@ -41,7 +41,7 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        <nav className="admin-nav">
+        <nav className="admin-nav" data-tt="admin-nav">
           {LINKS.map((l) => (
             <NavLink
               key={l.to}
@@ -68,7 +68,7 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <main className="admin-main">
+      <main className="admin-main" data-tt="admin-main">
         <Outlet />
       </main>
     </div>
