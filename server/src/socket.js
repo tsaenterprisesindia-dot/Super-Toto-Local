@@ -138,6 +138,7 @@ export function setupSocket(io) {
   io.on('connection', (socket) => {
     const { id, role } = socket.user;
     socket.join(`user:${id}`);
+    if (role === 'admin') socket.join('admins');
 
     // Driver live-location streaming
     socket.on('driver:location', async (payload) => {

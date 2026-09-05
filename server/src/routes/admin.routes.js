@@ -6,10 +6,11 @@ import Ride from '../models/Ride.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
+import { SafetyEvent } from '../models/SafetyEvent.js';
 import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 
-export default function adminRoutes() {
+export default function adminRoutes(io) {
   const router = Router();
   router.use(requireAuth, requireRole('admin'));
 
@@ -891,6 +892,52 @@ export default function adminRoutes() {
             createdAt: e.createdAt,
           })),
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Safety: SOS alerts from riders (monitoring panel)
+  router.get('/sos', async (req, res, next) => {
+    try {
+      const pop = [
+        { path: 'rider', select: 'name phone' },
+        { path: 'driver', select: 'name phone vehicleNumber vehicleType vehicleDetails' },
+        { path: 'ride', select: 'pickup drop status shareToken distanceKm durationMin' },
+      ];
+      const active = await SafetyEvent.find({ status: 'active' })
+        .populate(pop)
+        .sort('-incidentAt')
+        .lean();
+      const recent = await SafetyEvent.find({ status: 'solved' })
+        .populate(pop)
+        .sort('-resolvedAt')
+        .limit(50)
+        .lean();
+      res.json({ active, recent });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Safety: admin resolves an SOS alert
+  router.post('/sos/:id/resolve', async (req, res, next) => {
+    try {
+      const { note } = req.body;
+      const event = await SafetyEvent.findById(req.params.id);
+      if (!event) return res.status(404).json({ message: 'Alert not found' });
+      event.status = 'solved';
+      event.resolvedAt = new Date();
+      event.resolvedBy = req.user?.id || null;
+      event.resolutionNote = String(note || '').trim();
+      await event.save();
+      const dto = await SafetyEvent.findById(event._id)
+        .populate('rider', 'name phone')
+        .populate('driver', 'name phone vehicleNumber vehicleType vehicleDetails')
+        .populate('ride', 'pickup drop status shareToken distanceKm durationMin')
+        .lean();
+      if (io?.to) io.to('admins').emit('sos:solved', dto);
+      res.json({ event: dto });
     } catch (err) {
       next(err);
     }

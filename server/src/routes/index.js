@@ -7,12 +7,61 @@ import riderRoutes from './rider.routes.js';
 import adminRoutes from './admin.routes.js';
 import chatbotRoutes from './chatbot.routes.js';
 import feedbackRoutes from './feedback.routes.js';
+import Ride from '../models/Ride.js';
+import { haversineKm } from '../utils/pricing.js';
 import { getFeedbackConfig, getAdsConfig, getSafetyTipsConfig, getBikeTaxiConfig, getUpiConfig, getContactConfig, getChatbotConfig, getSeatBookingConfig, getComplianceConfig, resolveFarePolicy, INDIA_STATES, stateName } from '../services/settings.js';
 
 export default function routes(io) {
   const router = Router();
   router.use('/auth', authRoutes());
   router.use('/face', faceRoutes());
+
+  // PUBLIC — live "track my ride" link shared by the rider (no auth; unguessable token)
+  router.get('/track/:token', async (req, res, next) => {
+    try {
+      const ride = await Ride.findOne({ shareToken: req.params.token })
+        .populate('driver', 'name rating ratingsCount vehicleType vehicleNumber vehicleDetails location')
+        .lean();
+      if (!ride) return res.status(404).json({ message: 'Tracking link not found' });
+      if (!ride.shareEnabled || !['assigned', 'driver_arrived', 'in_progress'].includes(ride.status)) {
+        return res.json({ sharing: false });
+      }
+      const driver = ride.driver || null;
+      let driverPos = null;
+      if (driver?.location?.lat != null) {
+        driverPos = { lat: driver.location.lat, lng: driver.location.lng };
+      }
+      let etaMinutes = null;
+      if (driverPos && ride.startedAt && ride.durationMin > 0 && ride.distanceKm > 0) {
+        const avgKmh = (ride.distanceKm / ride.durationMin) * 60;
+        const remainingKm = haversineKm(driverPos, ride.drop);
+        etaMinutes = Math.max(1, Math.round((remainingKm / (avgKmh || 1)) * 60));
+      }
+      res.json({
+        sharing: true,
+        status: ride.status,
+        pickup: ride.pickup,
+        drop: ride.drop,
+        distanceKm: ride.distanceKm,
+        durationMin: ride.durationMin,
+        startedAt: ride.startedAt,
+        etaMinutes,
+        driver: driver
+          ? {
+              name: driver.name,
+              rating: driver.rating,
+              vehicleType: driver.vehicleType,
+              vehicleNumber: driver.vehicleNumber,
+              vehicleDetails: driver.vehicleDetails || {},
+            }
+          : null,
+        driverPos,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.use('/rides', rideRoutes(io));
   router.use('/driver', driverRoutes(io));
   router.use('/rider', riderRoutes());

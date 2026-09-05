@@ -5,6 +5,7 @@ import client from '../api/client.js';
 import MapView from './MapView.jsx';
 import AdBanner from './AdBanner.jsx';
 import AdInterstitial from './AdInterstitial.jsx';
+import Modal from './Modal.jsx';
 import { STATUS_LABELS, formatINR, formatTime, PAYMENT_METHODS } from '../utils/geo.js';
 
 const STEPS = [
@@ -49,6 +50,15 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
   const [upiCfg, setUpiCfg] = useState({ upiId: '', merchantName: 'Super Toto Local', enabled: true, showQr: true });
   const [upiPaid, setUpiPaid] = useState(false);
   const [seatCfg, setSeatCfg] = useState({ mode: 'shared' });
+
+  // SOS + live trip sharing
+  const [sosOpen, setSosOpen] = useState(false);
+  const [sosMsg, setSosMsg] = useState('');
+  const [sosBusy, setSosBusy] = useState(false);
+  const [sosSent, setSosSent] = useState(false);
+  const [sosErr, setSosErr] = useState('');
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareErr, setShareErr] = useState('');
 
   const isRider = role === 'rider';
   const seatMode = ['shared', 'reserved', 'off'].includes(seatCfg.mode)
@@ -122,6 +132,48 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
   const canCancel = ['requested', 'assigned'].includes(ride.status);
   const driver = ride.driver;
   const methodMeta = PAYMENT_METHODS.find((m) => m.id === method) || PAYMENT_METHODS[0];
+  const activeTrip = ['assigned', 'driver_arrived', 'in_progress'].includes(ride.status);
+  const shareUrl = ride.shareToken ? `${window.location.origin}/track/${ride.shareToken}` : '';
+
+  const sendSos = async () => {
+    setSosBusy(true);
+    setSosErr('');
+    try {
+      await client.post(`/rides/${ride._id}/sos`, { message: sosMsg });
+      setSosSent(true);
+      setTimeout(() => {
+        setSosOpen(false);
+        setSosSent(false);
+        setSosMsg('');
+        setSosErr('');
+      }, 2600);
+    } catch (e) {
+      setSosErr(e.response?.data?.message || t('tracker.errGeneric'));
+    } finally {
+      setSosBusy(false);
+    }
+  };
+
+  const toggleShare = async (enabled) => {
+    setShareBusy(true);
+    setShareErr('');
+    try {
+      const { data } = await client.post(`/rides/${ride._id}/share`, { enabled });
+      setRide((r) => ({ ...r, shareEnabled: data.enabled, shareToken: r.shareToken || data.token }));
+    } catch (e) {
+      setShareErr(e.response?.data?.message || t('tracker.errGeneric'));
+    } finally {
+      setShareBusy(false);
+    }
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch (e) {
+      setShareErr(t('tracker.errGeneric'));
+    }
+  };
 
   return (
     <div className="grid-2 fade-in">
@@ -184,6 +236,35 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
           ) : (
             <div className="alert alert-warn mt pulse">
               {t('tracker.searching')}
+            </div>
+          )}
+
+          {isRider && activeTrip && (
+            <div className="card mt" style={{ background: '#fff7f7', border: '1px solid #fecaca' }}>
+              <div className="spread" style={{ marginBottom: 10 }}>
+                <b>🛡️ {t('tracker.safety')}</b>
+                <span className="small muted">{t('tracker.safetySub')}</span>
+              </div>
+              <div className="row" style={{ gap: 10 }}>
+                <button className="btn btn-amber" style={{ flex: 1 }} disabled={shareBusy} onClick={() => toggleShare(!ride.shareEnabled)}>
+                  {ride.shareEnabled ? t('tracker.stopSharing') : t('tracker.shareLive')}
+                </button>
+                <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => setSosOpen(true)}>
+                  🚨 SOS
+                </button>
+              </div>
+              {ride.shareEnabled && (
+                <div className="field mt" style={{ marginBottom: 0 }}>
+                  <label>{t('tracker.trackLink')}</label>
+                  <div className="row" style={{ gap: 8 }}>
+                    <input className="input" readOnly value={shareUrl} />
+                    <button className="btn btn-primary" onClick={copyLink}>
+                      {t('tracker.copy')}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {shareErr && <div className="err-box mt">{shareErr}</div>}
             </div>
           )}
 
@@ -600,6 +681,54 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
           <div className="alert alert-green">{t('tracker.ratedRider', { rating: ride.driverRating })}</div>
         )}
       </div>
+      {isRider && activeTrip && (
+        <Modal
+          open={sosOpen}
+          onClose={() => {
+            if (!sosBusy) {
+              setSosOpen(false);
+              setSosErr('');
+              setSosSent(false);
+            }
+          }}
+        >
+          {sosSent ? (
+            <div>
+              <h3>🚨 {t('tracker.sosSentTitle')}</h3>
+              <div className="alert alert-green" style={{ marginBottom: 0 }}>
+                {t('tracker.sosSentBody')}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h3>🚨 {t('tracker.sosTitle')}</h3>
+              <p className="small muted">
+                {t('tracker.sosBody')}
+              </p>
+              <div className="field" style={{ marginBottom: 10 }}>
+                <label htmlFor="sosMsg">{t('tracker.sosMsgLabel')}</label>
+                <textarea
+                  id="sosMsg"
+                  className="input"
+                  rows={2}
+                  value={sosMsg}
+                  onChange={(e) => setSosMsg(e.target.value)}
+                  placeholder={t('tracker.sosMsgPlaceholder')}
+                />
+              </div>
+              {sosErr && <div className="err-box" style={{ marginBottom: 10 }}>{sosErr}</div>}
+              <div className="modal-actions">
+                <button type="button" className="btn" onClick={() => setSosOpen(false)} disabled={sosBusy}>
+                  {t('tracker.cancel')}
+                </button>
+                <button type="button" className="btn btn-danger" disabled={sosBusy} onClick={sendSos}>
+                  {sosBusy ? t('tracker.sosSending') : t('tracker.sosSend')}
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
       <AdBanner />
       <AdInterstitial visible={showInterstitial} onClose={() => setShowInterstitial(false)} />
     </div>

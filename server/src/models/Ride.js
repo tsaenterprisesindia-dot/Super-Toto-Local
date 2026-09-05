@@ -137,6 +137,18 @@ const rideSchema = new mongoose.Schema(
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
+
+    // Live "track my ride" sharing
+    shareToken: {
+      type: String,
+      index: true,
+      default: () =>
+        'stl-' +
+        Math.random().toString(36).slice(2) +
+        Date.now().toString(36) +
+        Math.random().toString(36).slice(2, 6),
+    },
+    shareEnabled: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

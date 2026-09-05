@@ -13,6 +13,7 @@ import {
 import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
 import { settleCashDue } from '../services/cashSettlement.js';
 import { CashLedger } from '../models/CashLedger.js';
+import { SafetyEvent } from '../models/SafetyEvent.js';
 import { buildGstInvoice } from '../utils/invoice.js';
 import {
   dispatchRideRequest,
@@ -763,6 +764,89 @@ export default function rideRoutes(io) {
         ride: await Ride.findById(ride._id).populate('driver', 'name').lean(),
         discount: feedbackDiscount,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Rider shares their live trip with family/friends via a public track link
+  router.post('/:id/share', requireRole('rider'), async (req, res, next) => {
+    try {
+      const { enabled } = req.body;
+      const ride = await Ride.findById(req.params.id);
+      if (!ride) return res.status(404).json({ message: 'Ride not found' });
+      const userId = String(req.user.id);
+      const isParticipant =
+        String(ride.rider) === userId ||
+        (ride.occupants || []).some((o) => String(o.rider) === userId);
+      if (!isParticipant) return res.status(403).json({ message: 'Not your ride' });
+      if (!['assigned', 'driver_arrived', 'in_progress'].includes(ride.status)) {
+        return res.status(400).json({ message: 'You can share a trip only while it is active' });
+      }
+
+      ride.shareEnabled = enabled === true;
+      await ride.save();
+      emitRideUpdate(io, ride._id);
+      res.json({ enabled: ride.shareEnabled, token: ride.shareToken });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Rider triggers SOS: alerts the admin monitoring panel with live coordinates
+  router.post('/:id/sos', requireRole('rider'), async (req, res, next) => {
+    try {
+      const { message } = req.body;
+      const ride = await Ride.findById(req.params.id);
+      if (!ride) return res.status(404).json({ message: 'Ride not found' });
+      const userId = String(req.user.id);
+      const isParticipant =
+        String(ride.rider) === userId ||
+        (ride.occupants || []).some((o) => String(o.rider) === userId);
+      if (!isParticipant) return res.status(403).json({ message: 'Not your ride' });
+      if (!['assigned', 'driver_arrived', 'in_progress'].includes(ride.status)) {
+        return res.status(400).json({ message: 'You can trigger SOS only during an active trip' });
+      }
+
+      let riderCoords = null;
+      let driverCoords = null;
+      if (req.user?.location?.lat != null) {
+        riderCoords = { lat: req.user.location.lat, lng: req.user.location.lng };
+      }
+      const driver = ride.driver ? await User.findById(ride.driver) : null;
+      if (driver?.location?.lat != null) {
+        driverCoords = { lat: driver.location.lat, lng: driver.location.lng };
+      }
+      if (!riderCoords && driverCoords) riderCoords = driverCoords;
+
+      // Re-use the still-open alert for this trip instead of stacking duplicates
+      let event = await SafetyEvent.findOne({ ride: ride._id, status: 'active' })
+        .sort('-incidentAt')
+        .exec();
+      if (event) {
+        event.message = String(message || '').trim();
+        event.riderCoords = riderCoords;
+        event.driverCoords = driverCoords;
+      } else {
+        event = new SafetyEvent({
+          ride: ride._id,
+          rider: req.user.id,
+          driver: ride.driver || null,
+          message: String(message || '').trim(),
+          riderCoords,
+          driverCoords,
+        });
+      }
+      await event.save();
+
+      const dto = await SafetyEvent.findById(event._id)
+        .populate('rider', 'name phone')
+        .populate('driver', 'name phone vehicleNumber vehicleType vehicleDetails')
+        .populate('ride', 'pickup drop status shareToken distanceKm durationMin')
+        .lean();
+
+      io.to('admins').emit('sos:new', dto);
+      res.status(201).json({ event: dto });
     } catch (err) {
       next(err);
     }

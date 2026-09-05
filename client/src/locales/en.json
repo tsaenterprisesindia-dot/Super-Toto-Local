@@ -244,7 +244,22 @@
     "arrivedPickup": "📍 I have arrived at pickup",
     "startTrip": "▶️ Start trip",
     "completeEarn": "✅ Complete trip · earn {{amount}}",
-    "confirmCash": "💵 Confirm cash collection · {{amount}}"
+    "confirmCash": "💵 Confirm cash collection · {{amount}}",
+    "safety": "Safety & sharing",
+    "safetySub": "active trip",
+    "stopSharing": "🔒 Stop sharing",
+    "shareLive": "🔗 Share live trip",
+    "trackLink": "Track my ride link",
+    "copy": "Copy",
+    "sosTitle": "Emergency SOS",
+    "sosBody": "This alerts the Super Toto Local monitoring team with your live location and trip details.",
+    "sosMsgLabel": "Message (optional)",
+    "sosMsgPlaceholder": "Describe the emergency, if you can…",
+    "sosSend": "🚨 Send SOS",
+    "sosSending": "Sending…",
+    "sosSentTitle": "SOS sent",
+    "sosSentBody": "✅ The monitoring team has been alerted with your live location.",
+    "cancel": "Cancel"
   },
   "feedback": {
     "title": "Complaints & Suggestions",

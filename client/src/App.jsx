@@ -6,6 +6,7 @@ import Login from './pages/Login.jsx';
 import FaceLogin from './pages/FaceLogin.jsx';
 import Register from './pages/Register.jsx';
 import ForgotPassword from './pages/ForgotPassword.jsx';
+import TrackRide from './pages/TrackRide.jsx';
 import RiderHome from './pages/RiderHome.jsx';
 import DriverHome from './pages/DriverHome.jsx';
 import RideHistory from './pages/RideHistory.jsx';
@@ -27,6 +28,7 @@ import AdminRiders from './pages/admin/AdminRiders.jsx';
 import AdminRides from './pages/admin/AdminRides.jsx';
 import AdminReports from './pages/admin/AdminReports.jsx';
 import AdminCash from './pages/admin/AdminCash.jsx';
+import AdminSOS from './pages/admin/AdminSOS.jsx';
 import AdminSettings from './pages/admin/AdminSettings.jsx';
 import AdminVehicleRates from './pages/admin/AdminVehicleRates.jsx';
 import AdminAds from './pages/admin/AdminAds.jsx';
@@ -62,6 +64,7 @@ export default function App() {
       <Route path="/face-login" element={<FaceLogin />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/track/:token" element={<TrackRide />} />
       <Route path="/legal/privacy" element={<Privacy />} />
       <Route path="/legal/disclosures" element={<Disclosures />} />
 
@@ -168,6 +171,7 @@ export default function App() {
         <Route path="rides" element={<AdminRides />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="cash" element={<AdminCash />} />
+        <Route path="sos" element={<AdminSOS />} />
         <Route path="vehicle-rates" element={<AdminVehicleRates />} />
         <Route path="ads" element={<AdminAds />} />
         <Route path="safety-tips" element={<AdminSafetyTips />} />
