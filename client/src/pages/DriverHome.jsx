@@ -6,6 +6,7 @@ import WarningBanner from '../components/WarningBanner.jsx';
 import Modal from '../components/Modal.jsx';
 import RideTracker from '../components/RideTracker.jsx';
 import SafetyTips from '../components/SafetyTips.jsx';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import { moveToward, jitter, formatINR, DESTINATIONS } from '../utils/geo.js';
@@ -28,9 +29,16 @@ export default function DriverHome() {
   const [depositRef, setDepositRef] = useState('');
   const [depBusy, setDepBusy] = useState(false);
   const [cashMsg, setCashMsg] = useState('');
+  const [upiCfg, setUpiCfg] = useState({ upiId: 'supertotolocal@upi', merchantName: 'Super Toto Local', enabled: true, showQr: true });
   const [driverPos, setDriverPos] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const depositNum = Math.round((Number(depositAmt) || 0) * 100) / 100;
+  const upiPayUrl =
+    depositNum > 0 && upiCfg.enabled !== false
+      ? `upi://pay?pa=${encodeURIComponent(upiCfg.upiId || 'supertotolocal@upi')}&pn=${encodeURIComponent(upiCfg.merchantName || 'Super Toto Local')}&am=${encodeURIComponent(depositNum)}&cu=INR&tn=${encodeURIComponent('Super Toto Local - cash settlement deposit')}`
+      : null;
 
   const baseLoc = useRef(user?.location?.lat != null ? user.location : DESTINATIONS[0]);
   const pendingRef = useRef(null);
@@ -94,6 +102,10 @@ export default function DriverHome() {
     loadSummary();
     loadCash();
   }, [loadActive, loadSummary, loadCash]);
+
+  useEffect(() => {
+    client.get('/upi-config').then(({ data }) => setUpiCfg(data.upiConfig || {})).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!socket) return;
@@ -274,16 +286,35 @@ export default function DriverHome() {
                   You keep your net share; the platform's share must be returned. Paid via UPI below, or it is{' '}
                   <b>auto-deducted from your digital (UPI/Card) earnings</b>.
                 </p>
-                {cash.overdue && (
-                  <div className="small" style={{ color: '#c0392b', fontWeight: 700, marginBottom: 8 }}>
-                    You have held {formatINR(cash.due)} for {cash.overdueByHours} hrs (limit {cash.limit !== undefined ? formatINR(cash.limit) : '₹500'} / 48h) — going online is blocked until you deposit.
+                {(cash.overdue || (cash.deadlineProgressPct || 0) >= 50) && (
+                  <div
+                    className="small"
+                    style={{
+                      background: cash.overdue ? '#fdecea' : '#fff7e6',
+                      color: cash.overdue ? '#c0392b' : '#8a6100',
+                      fontWeight: 700,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      marginBottom: 8,
+                      border: `1px solid ${cash.overdue ? '#c0392b' : '#e8c768'}`,
+                    }}
+                  >
+                    {cash.overdue
+                      ? `🚨 You have held ${formatINR(cash.due)} for ${cash.overdueByHours} hrs (limit ${cash.limit !== undefined ? formatINR(cash.limit) : '₹500'} / ${cash.deadlineHours || 48}h) — going online is blocked until you deposit.`
+                      : `⏳ Deadline uses ${cash.deadlineProgressPct}% of the ${cash.deadlineHours || 48}h window — deposit within ${cash.hoursLeft}h or your online access will be blocked.`}
                   </div>
                 )}
-                {!cash.overdue && (
+                {!cash.overdue && cash.deadlineProgressPct < 50 && (
                   <div className="small muted" style={{ marginBottom: 8 }}>
-                    Pending since {cash.cashPendingSince ? new Date(cash.cashPendingSince).toLocaleDateString() : '—'} · stay within the {cash.limit !== undefined ? formatINR(cash.limit) : '₹500'} / 48h limit to keep working.
+                    Pending since {cash.cashPendingSince ? new Date(cash.cashPendingSince).toLocaleDateString() : '—'} · stay within the {cash.limit !== undefined ? formatINR(cash.limit) : '₹500'} / {cash.deadlineHours || 48}h limit to keep working.
                   </div>
                 )}
+                {cash.reminderSent && (
+                  <div className="small" style={{ marginBottom: 8, color: '#334155', fontStyle: 'italic' }}>
+                    📩 SMS reminder sent to your registered phone {new Date(cash.reminderSentAt).toLocaleString()} — deposit soon to avoid being blocked.
+                  </div>
+                )}
+                {cash.reminderSentJustNow && <div className="small" style={{ marginBottom: 8, color: 'var(--brand-dark)', fontWeight: 700 }}>📩 SMS reminder sent now — please deposit to avoid a block.</div>}
                 <div className="spread" style={{ gap: 8 }}>
                   <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => setDepositOpen(true)} disabled={depBusy}>
                     💳 Deposit via UPI
@@ -465,7 +496,7 @@ export default function DriverHome() {
 
       <Modal open={depositOpen} onClose={() => setDepositOpen(false)} title="💳 Deposit cash settlement via UPI">
         <p className="small muted" style={{ marginTop: 0 }}>
-          Pay the platform's cash share (commission + GST you collected) using any UPI app, then enter the amount and UPI transaction reference (UTR) below.
+          Return the platform's cash share (commission + GST you collected). Scan the QR or tap <b>Pay via UPI</b> with any UPI app, then enter the amount and transaction reference (UTR) below to complete.
         </p>
         <div className="small" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 12 }}>
           <span className="spread">
@@ -483,6 +514,37 @@ export default function DriverHome() {
           onChange={(e) => setDepositAmt(e.target.value)}
           placeholder={`Up to ${formatINR(cash?.due || 0)}`}
         />
+        {upiCfg.enabled !== false && depositNum > 0 && (
+          <div style={{ textAlign: 'center', margin: '14px 0' }}>
+            <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 12, border: '2px solid #1e293b', marginBottom: 8 }}>
+              <QRCodeSVG
+                value={upiPayUrl}
+                size={170}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+            <div style={{ fontSize: 13, color: '#475569', marginBottom: 4 }}>
+              Pay to: <b>{upiCfg.upiId || 'supertotolocal@upi'}</b> ({upiCfg.merchantName || 'Super Toto Local'})
+            </div>
+            <button
+              className="btn btn-primary btn-block"
+              onClick={() => upiPayUrl && window.open(upiPayUrl, '_blank')}
+            >
+              💳 Pay {formatINR(depositNum)} via UPI
+            </button>
+            <p className="small muted" style={{ margin: '6px 0 0' }}>
+              Opens your UPI app · {upiCfg.instructions || 'Scan the QR or tap the button to pay via any UPI app.'}
+            </p>
+          </div>
+        )}
+        {upiCfg.enabled === false && (
+          <div style={{ margin: '12px 0' }}>
+            <button className="btn btn-primary btn-block" onClick={() => window.open(upiPayUrl, '_blank')} disabled={!upiPayUrl}>
+              💳 Pay {depositNum > 0 ? formatINR(depositNum) : 'amount'} via UPI
+            </button>
+          </div>
+        )}
         <label className="muted" style={{ display: 'block', margin: '10px 0 4px' }}>UPI Reference (UTR) — e.g. 4CL7XY29Z</label>
         <input
           className="form-input"

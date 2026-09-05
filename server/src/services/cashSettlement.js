@@ -67,6 +67,9 @@ export async function settleCashDue({ driverId, amount, rideId = null, source = 
 
 // ─── Overdue policy ────────────────────────────────────────────────────────────
 
+// Fraction of the deadline after which a reminder SMS is (simulatedly) sent.
+export const REMINDER_THRESHOLD = 0.5;
+
 export function cashStatus(driver, cfg) {
   const o = cfg?.cashSettlement || { overdueLimit: 500, deadlineHours: 48 };
   const due = Math.round((driver.cashDue || 0) * 100) / 100;
@@ -78,13 +81,37 @@ export function cashStatus(driver, cfg) {
     hoursHeld = (Date.now() - new Date(driver.cashPendingSince).getTime()) / 3600000;
   }
   const overdue = due > o.overdueLimit && hoursHeld > o.deadlineHours;
+  const deadlineProgressPct = Math.round(Math.min(100, (hoursHeld / (o.deadlineHours || 1)) * 100));
+  const hoursLeft = Math.max(0, Math.round((o.deadlineHours - hoursHeld) * 10) / 10);
   return {
     due,
     pending: true,
     overdue,
     overdueByHours: Math.round(hoursHeld * 10) / 10,
     limit: o.overdueLimit,
+    deadlineHours: o.deadlineHours,
+    deadlineProgressPct,
+    hoursLeft,
+    reminderSent: !!driver.cashReminderSentAt,
+    reminderSentAt: driver.cashReminderSentAt || null,
+    smsPreview: `Super Toto Local: deposit ₹${due.toLocaleString('en-IN')} of cash settlements (held ${Math.round(hoursHeld)}h). Deposit via UPI or it will be auto-deducted/blocked. Helpline 9811997286.`,
   };
+}
+
+// Simulated SMS gateway: record that a reminder has been sent once the driver has
+// held a cash balance past the threshold. Idempotent — only ever "sends" once.
+export async function maybeSendCashReminder(driverId, cfg) {
+  const driver = await User.findById(driverId);
+  if (!driver || (driver.cashDue || 0) <= 0 || driver.cashReminderSentAt) {
+    return { sent: false, status: cashStatus(driver || {}, cfg) };
+  }
+  const status = cashStatus(driver, cfg);
+  if (status.deadlineProgressPct < REMINDER_THRESHOLD * 100) {
+    return { sent: false, status };
+  }
+  driver.cashReminderSentAt = new Date();
+  await driver.save();
+  return { sent: true, sentAt: driver.cashReminderSentAt, smsPreview: status.smsPreview, status: { ...status, reminderSent: true, reminderSentAt: driver.cashReminderSentAt } };
 }
 
 // Fetch driver docs with their cash due (used by admin + driver endpoints).
@@ -101,6 +128,11 @@ export function toCashDTO(driver, cfg) {
     overdue: status.overdue,
     overdueByHours: status.overdueByHours,
     limit: status.limit,
+    deadlineHours: status.deadlineHours,
+    deadlineProgressPct: status.deadlineProgressPct,
+    hoursLeft: status.hoursLeft,
+    reminderSent: status.reminderSent,
+    reminderSentAt: status.reminderSentAt,
     cashPendingSince: driver.cashPendingSince || null,
   };
 }

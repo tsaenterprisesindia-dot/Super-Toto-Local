@@ -77,6 +77,7 @@ const userSchema = new mongoose.Schema(
     cashDue: { type: Number, default: 0 },
     cashDeposited: { type: Number, default: 0 }, // lifetime settled to the platform
     cashPendingSince: { type: Date, default: null }, // when cashDue first went above 0
+    cashReminderSentAt: { type: Date, default: null }, // when the deadline-approaching SMS reminder was (simulatedly) sent
 
     // Terms & Conditions
     termsAcceptedAt: { type: Date, default: null },

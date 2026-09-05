@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import client from '../../api/client.js';
+import Modal from '../../components/Modal.jsx';
 
 const fmt = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const TYPE_LABEL = { cash_collected: '💰 Cash collected', deposit: '📲 UPI deposit', auto_deduct: '🔁 Auto-deducted' };
 
 export default function AdminCash() {
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [detail, setDetail] = useState(null); // { status, entries }
+  const [detailBusy, setDetailBusy] = useState(false);
+  const [detailErr, setDetailErr] = useState('');
 
   const load = () => {
     setBusy(true);
@@ -16,6 +21,16 @@ export default function AdminCash() {
       .finally(() => setBusy(false));
   };
   useEffect(load, []);
+
+  const openDetail = (driverId) => {
+    setDetail(null);
+    setDetailBusy(true);
+    setDetailErr('');
+    client.get(`/admin/cash/${driverId}`)
+      .then(({ data }) => setDetail(data))
+      .catch((e) => setDetailErr(e.response?.data?.message || 'Failed to load driver ledger'))
+      .finally(() => setDetailBusy(false));
+  };
 
   const s = data?.cashSettlement || { overdueLimit: 500, deadlineHours: 48 };
   const t = data?.totals || { outstanding: 0, totalCashCollected: 0, totalCashSettled: 0 };
@@ -106,25 +121,97 @@ export default function AdminCash() {
         )}
         <div className="stack">
           {outstandingDrivers.map((d) => (
-            <div key={d.driver} className="spread" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', flexWrap: 'wrap', gap: 8, background: d.overdue ? '#fff5f5' : 'var(--bg)' }}>
-              <div>
-                <div className="small" style={{ fontWeight: 800 }}>{d.name || 'Driver'} <span className="muted">{d.phone || ''}</span></div>
-                <div className="small muted">{d.vehicleNumber || '—'} · owed since {d.cashPendingSince ? new Date(d.cashPendingSince).toLocaleDateString() : '—'}</div>
-                {d.overdue && (
-                  <div className="small" style={{ color: '#c0392b', fontWeight: 700 }}>
-                    🚨 OVERDUE · held {d.overdueByHours} hrs (limit {fmt(d.limit)} / {s.deadlineHours}h) — blocked from online
-                  </div>
-                )}
+            <button
+              key={d.driver}
+              onClick={() => openDetail(d.driver)}
+              className="btn btn-ghost"
+              style={{ display: 'block', width: '100%', textAlign: 'left', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', background: d.overdue ? '#fff5f5' : 'var(--bg)', margin: 0 }}
+            >
+              <div className="spread" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <div>
+                  <div className="small" style={{ fontWeight: 800 }}>{d.name || 'Driver'} <span className="muted">{d.phone || ''}</span></div>
+                  <div className="small muted">{d.vehicleNumber || '—'} · owed since {d.cashPendingSince ? new Date(d.cashPendingSince).toLocaleDateString() : '—'}</div>
+                  <div className="small muted">Settlement window: {d.deadlineHours || 48}h used {d.deadlineProgressPct || 0}% · {d.hoursLeft ?? 0}h left</div>
+                  {d.reminderSent && <div className="small" style={{ color: '#334155', fontStyle: 'italic' }}>📩 SMS reminder sent {d.reminderSentAt ? new Date(d.reminderSentAt).toLocaleString() : ''}</div>}
+                  {d.overdue && (
+                    <div className="small" style={{ color: '#c0392b', fontWeight: 700 }}>
+                      🚨 OVERDUE · held {d.overdueByHours} hrs (limit {fmt(d.limit)} / {d.deadlineHours || 48}h) — blocked from online
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div className="small muted">Cash owed</div>
+                  <b style={{ fontSize: 20, fontWeight: 900, color: d.overdue ? '#c0392b' : 'var(--brand-dark)' }}>{fmt(d.cashDue)}</b>
+                  <div className="small muted">Returned so far: {fmt(d.cashDeposited)}</div>
+                  <div className="small" style={{ color: 'var(--brand-dark)', fontWeight: 700 }}>View ledger →</div>
+                </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="small muted">Cash owed</div>
-                <b style={{ fontSize: 20, fontWeight: 900, color: d.overdue ? '#c0392b' : 'var(--brand-dark)' }}>{fmt(d.cashDue)}</b>
-                <div className="small muted">Returned so far: {fmt(d.cashDeposited)}</div>
-              </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
+
+      <Modal open={!!detail || detailBusy} onClose={() => { setDetail(null); setDetailErr(''); }}>
+        {detailErr && <div className="small" style={{ color: '#c0392b', fontWeight: 700, margin: '10px 0' }}>{detailErr}</div>}
+        {detail && (
+          <div className="stack">
+            <div className="spread" style={{ marginBottom: 4 }}>
+              <h2 style={{ margin: 0, fontSize: 20 }}>💵 {detail.status.name || 'Driver'}'s cash ledger</h2>
+              <button className="btn btn-ghost" onClick={() => { setDetail(null); setDetailErr(''); }}>✕ Close</button>
+            </div>
+            <p className="small muted" style={{ marginTop: 0 }}>
+              {detail.status.phone || ''} · {detail.status.vehicleNumber || '—'}
+            </p>
+            <div className="spread" style={{ gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <div>
+                <div className="small muted">Cash owed now</div>
+                <b style={{ fontSize: 24, fontWeight: 900, color: detail.status.overdue ? '#c0392b' : 'var(--brand-dark)' }}>{fmt(detail.status.cashDue)}</b>
+              </div>
+              <div>
+                <div className="small muted">Returned so far</div>
+                <b>{fmt(detail.status.cashDeposited)}</b>
+              </div>
+              <div>
+                <div className="small muted">Window used</div>
+                <b>{detail.status.deadlineProgressPct || 0}% ({detail.status.hoursLeft ?? 0}h left of {detail.status.deadlineHours || 48}h)</b>
+              </div>
+              <div>
+                <div className="small muted">Status</div>
+                <b style={{ color: detail.status.overdue ? '#c0392b' : (detail.status.pending ? '#8a6100' : 'var(--brand-dark)') }}>
+                  {detail.status.overdue ? '🚨 Overdue' : detail.status.pending ? '⏳ Pending' : '✓ Settled'}
+                </b>
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <b className="small">Simulated SMS to driver</b>
+              <div className="small muted" style={{ border: '1px dashed var(--border)', borderRadius: 8, padding: '8px 10px', marginTop: 4, fontStyle: 'italic' }}>
+                {detail.status.smsPreview || (
+                  detail.status.reminderSent
+                    ? `📩 Sent ${detail.status.reminderSentAt ? new Date(detail.status.reminderSentAt).toLocaleString() : ''}`
+                    : 'Reminder will be sent automatically when the driver has used 50% of the settlement window.'
+                )}
+              </div>
+            </div>
+            <h3 style={{ margin: '14px 0 8px', fontSize: 16 }}>Ledger history ({detail.entries.length})</h3>
+            <div className="stack">
+              {detail.entries.length === 0 && <p className="small muted" style={{ marginTop: 0 }}>No cash ledger activity for this driver.</p>}
+              {detail.entries.map((e) => (
+                <div key={e.id} className="small spread" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                  <span style={{ display: 'block', maxWidth: '70%' }}>
+                    {TYPE_LABEL[e.type] || e.type}
+                    <span className="muted" style={{ display: 'block' }}>{e.note}</span>
+                    <span className="muted">{new Date(e.createdAt).toLocaleString()}</span>
+                  </span>
+                  <b style={{ color: e.type === 'cash_collected' ? '#c0392b' : 'var(--brand-dark)' }}>
+                    {e.type === 'cash_collected' ? '+' : '−'}{fmt(e.amount)}
+                  </b>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {detailBusy && !detail && <p className="small muted">Loading ledger…</p>}
+      </Modal>
     </div>
   );
 }

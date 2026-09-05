@@ -10,7 +10,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRideUpdate, clearDispatchTimer, toRideDTO, dispatchNext } from '../socket.js';
 import { getComplianceConfig, getRequiredDriverDocs } from '../services/settings.js';
 import { CashLedger } from '../models/CashLedger.js';
-import { addCashCollection, settleCashDue, cashStatus, platformShareOf } from '../services/cashSettlement.js';
+import { addCashCollection, settleCashDue, cashStatus, maybeSendCashReminder, platformShareOf } from '../services/cashSettlement.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -482,11 +482,14 @@ export default function driverRoutes(io) {
       const compliance = await getComplianceConfig();
       const user = await User.findById(req.user.id);
       const ledger = await CashLedger.findOne({ driver: req.user.id });
+      // Simulated SMS gateway: fires once when the deadline is half used.
+      const reminder = await maybeSendCashReminder(req.user.id, compliance);
       res.json({
         cashDue: user.cashDue || 0,
         cashDeposited: user.cashDeposited || 0,
         cashPendingSince: user.cashPendingSince || null,
-        ...cashStatus(user, compliance),
+        ...reminder.status,
+        reminderSentJustNow: reminder.sent,
         entries: (ledger?.entries || [])
           .slice()
           .reverse()
@@ -529,8 +532,11 @@ export default function driverRoutes(io) {
         amount,
         rideId: null,
         source: 'deposit',
-        note: `UPI deposit · ref ${upiRef}`,
+        note: upiRef ? `UPI deposit · ref ${upiRef}` : 'UPI deposit',
       });
+      if (upiRef) {
+        await User.updateOne({ _id: req.user.id, cashDue: { $lte: 0.005 } }, { $set: { cashReminderSentAt: null } });
+      }
       const full = await User.findById(req.user.id);
       res.json({ message: `Deposit of ₹${applied} recorded. Outstanding cash due: ₹${full.cashDue}.`, ...result, cashDue: full.cashDue, cashDeposited: full.cashDeposited });
     } catch (err) {

@@ -531,7 +531,8 @@ export async function saveSeatBookingConfig(input = {}) {
 export const UPI_DEFAULTS = {
   // Never hardcode a personal/business UPI handle in source. The operator sets
   // it via env (UPI_ID) or the Admin → Settings → UPI page (persisted in DB).
-  upiId: process.env.UPI_ID || '',
+  // Demo fallback keeps QR payment flows usable until the operator configures one.
+  upiId: process.env.UPI_ID || 'supertotolocal@upi',
   merchantName: 'Super Toto Local',
   enabled: true,
   showQr: true,

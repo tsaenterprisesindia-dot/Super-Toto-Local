@@ -5,7 +5,7 @@ import User from '../models/User.js';
 import Ride from '../models/Ride.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { toCashDTO } from '../services/cashSettlement.js';
+import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
 import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 
@@ -827,7 +827,7 @@ export default function adminRoutes() {
     try {
       const compliance = await getComplianceConfig();
       const drivers = await User.find({ role: 'driver', driverStatus: 'approved' })
-        .select('name phone vehicleNumber cashDue cashDeposited cashPendingSince')
+        .select('name phone vehicleNumber cashDue cashDeposited cashPendingSince cashReminderSentAt')
         .sort({ cashDue: -1 });
       const rows = drivers
         .filter((d) => (d.cashDue || 0) > 0.005)
@@ -859,6 +859,37 @@ export default function adminRoutes() {
           totalCashCollected: Math.round(ledger.collected * 100) / 100,
           totalCashSettled: Math.round(ledger.settled * 100) / 100,
         },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Per-driver cash ledger detail: full audit trail (collections, deposits,
+  // auto-deductions), status, and simulated SMS reminder for a single driver.
+  router.get('/cash/:driverId', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.params.driverId).select(
+        'role name phone vehicleNumber vehicleType cashDue cashDeposited cashPendingSince cashReminderSentAt earnings totalRides'
+      );
+      if (!user) return res.status(404).json({ message: 'Driver not found' });
+      if (user.role !== 'driver') return res.status(400).json({ message: 'Not a driver account' });
+      const compliance = await getComplianceConfig();
+      const status = cashStatus(user, compliance);
+      const ledger = await CashLedger.findOne({ driver: user._id });
+      res.json({
+        status: { ...toCashDTO(user, compliance), smsPreview: status.smsPreview },
+        entries: (ledger?.entries || [])
+          .slice()
+          .reverse()
+          .map((e) => ({
+            id: e._id,
+            type: e.type,
+            amount: e.amount,
+            rideId: e.rideId,
+            note: e.note,
+            createdAt: e.createdAt,
+          })),
       });
     } catch (err) {
       next(err);
