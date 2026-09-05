@@ -48,7 +48,7 @@ async function surgeContext() {
 // - Reserved seats: the whole vehicle is reserved by ONE rider, who pays the full
 //   trip fare. No other riders can join.
 // - Off: whole-trip (1 passenger) billing, no seat booking.
-async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode }) {
+async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode, mode }) {
   const luggageCount = Number(luggage?.count) || 0;
   const luggageHeavyCount = Number(luggage?.heavyCount) || 0;
   const distanceKm = haversineKm(pickup, drop);
@@ -72,7 +72,15 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   }
   if (vtRates[vtId]) Object.assign(cfg, vtRates[vtId]);
   const seatCfg = await getSeatBookingConfig();
-  const seatMode = SEAT_MODES.includes(seatCfg.mode) ? seatCfg.mode : 'shared';
+  const cfgSeatMode = SEAT_MODES.includes(seatCfg.mode) ? seatCfg.mode : 'shared';
+  // The rider may pick 'reserved' (whole vehicle) vs 'shared' (per-seat) at
+  // booking time. The admin config stays the default; when the operator has
+  // disabled seat booking ('off'), the rider's choice is ignored.
+  const want = String(mode || '').trim();
+  let seatMode = cfgSeatMode;
+  if (cfgSeatMode !== 'off' && SEAT_MODES.includes(want)) {
+    seatMode = want;
+  }
   const reserved = seatMode === 'reserved';
   const seatsEnabled = seatMode !== 'off';
   const nominalSeats = Math.max(1, Math.round(Number(vtRates[vtId]?.seatCount) || Number(cfg.seatCount) || 1));
@@ -147,7 +155,7 @@ export default function rideRoutes(io) {
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode });
 
       let promoInfo = null;
       if (promo) {
@@ -215,7 +223,7 @@ export default function rideRoutes(io) {
         return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
       }
 
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode });
       if (!c.seatsEnabled && c.requestedSeats > 1) {
         return res.status(400).json({ message: 'Seat booking is currently disabled by the operator. Rides are booked for the whole trip (1 passenger).' });
       }
@@ -294,7 +302,7 @@ export default function rideRoutes(io) {
         return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
       }
 
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode });
       if (!c.seatsEnabled && c.requestedSeats > 1) {
         return res.status(400).json({ message: 'Seat booking is currently disabled by the operator. Rides are booked for the whole trip (1 passenger).' });
       }

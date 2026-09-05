@@ -72,6 +72,9 @@ export default function RiderHome() {
   const [joinSeats, setJoinSeats] = useState({});
   const [joiningId, setJoiningId] = useState(null);
   const [seatCfg, setSeatCfg] = useState({ mode: 'shared' });
+  const [bookMode, setBookMode] = useState(() =>
+    localStorage.getItem('stl_book_mode') === 'reserved' ? 'reserved' : 'shared'
+  );
 
   const currentUserId = JSON.parse(localStorage.getItem('btl_user') || '{}')?.id;
 
@@ -81,13 +84,24 @@ export default function RiderHome() {
       ? 'off'
       : 'shared';
   const seatsEnabled = seatMode !== 'off';
-  const reservedSeats = seatMode === 'reserved';
+  const reservedSeats = bookMode === 'reserved';
   const maxSeats = estimate?.seatCount || DEFAULT_SEATS[vehicleType] || 4;
 
   useEffect(() => {
     client
       .get('/seat-booking-config')
-      .then(({ data }) => setSeatCfg(data.seatBookingConfig || { mode: 'shared' }))
+      .then(({ data }) => {
+        const cfg = data.seatBookingConfig || { mode: 'shared' };
+        setSeatCfg(cfg);
+        const cfgMode = ['shared', 'reserved', 'off'].includes(cfg.mode) ? cfg.mode : 'shared';
+        if (cfgMode === 'off') {
+          setBookMode('shared');
+          localStorage.setItem('stl_book_mode', 'shared');
+          return;
+        }
+        const saved = localStorage.getItem('stl_book_mode');
+        setBookMode(saved === 'reserved' || saved === 'shared' ? saved : cfgMode);
+      })
       .catch(() => {});
     client.get('/fare-policy')
       .then(({ data }) => setStateList(data.states || []))
@@ -163,7 +177,7 @@ export default function RiderHome() {
     }
     let alive = true;
     client
-      .post('/rides/estimate', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo })
+      .post('/rides/estimate', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode })
       .then(({ data }) => {
         if (!alive) return;
         setEstimate(data);
@@ -174,7 +188,7 @@ export default function RiderHome() {
     return () => {
       alive = false;
     };
-  }, [pickup, drop, luggageCount, seats, vehicleType, fstate, promo]);
+  }, [pickup, drop, luggageCount, seats, vehicleType, fstate, promo, bookMode]);
 
   // Re-clamp the seat count when the vehicle type / capacity changes
   useEffect(() => {
@@ -197,12 +211,17 @@ export default function RiderHome() {
     else setDrop({ name: 'Custom drop', ...latlng, isCustom: true });
   };
 
+  const setBookModeValue = (m) => {
+    setBookMode(m);
+    localStorage.setItem('stl_book_mode', m);
+  };
+
   const requestRide = async () => {
     if (!pickup || !drop) return;
     setBusy(true);
     setErr('');
     try {
-      const { data } = await client.post('/rides', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo });
+      const { data } = await client.post('/rides', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode });
       setRide(data.ride);
       refreshShared();
     } catch (e) {
@@ -217,7 +236,7 @@ export default function RiderHome() {
     setBusy(true);
     setErr('');
     try {
-      const { data } = await client.post('/rides/reserve', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo });
+      const { data } = await client.post('/rides/reserve', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode });
       setRide(data.ride);
     } catch (e) {
       setErr(e.response?.data?.message || t('riderhome.reserveError') || 'Could not reserve a ride');
@@ -725,6 +744,27 @@ export default function RiderHome() {
                       </div>
                     )}
                   </div>
+
+                  {seatsEnabled && (
+                    <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+                      <button
+                        type="button"
+                        className={`btn${bookMode === 'reserved' ? ' btn-primary' : ' btn-ghost'}`}
+                        style={{ flex: 1 }}
+                        onClick={() => setBookModeValue('reserved')}
+                      >
+                        {t('riderhome.toggleReserve')}
+                      </button>
+                      <button
+                        type="button"
+                        className={`btn${bookMode === 'shared' ? ' btn-primary' : ' btn-ghost'}`}
+                        style={{ flex: 1 }}
+                        onClick={() => setBookModeValue('shared')}
+                      >
+                        {t('riderhome.toggleUnreserve')}
+                      </button>
+                    </div>
+                  )}
 
                   <div className="row mt" style={{ gap: 8 }}>
                     <button

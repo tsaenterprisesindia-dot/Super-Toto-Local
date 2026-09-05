@@ -142,6 +142,8 @@
     "requesting": "Requesting…",
     "reserveRequest": "🪑 Reserve & get a driver",
     "requestNow": "🛺 Request now",
+    "toggleReserve": "📌 Reserve",
+    "toggleUnreserve": "🪑 Unreserve (shared)",
     "joinTitle": "Join a shared trip with empty seats",
     "joinSub": "Trips are listed for a short window after a driver accepts and before the trip starts. Join to fill the empty seats — you pay only for your own seats.",
     "noSharedTrips": "No trips with empty seats right now. New trips appear here after a driver accepts.",
