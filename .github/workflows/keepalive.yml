@@ -1,0 +1,21 @@
+name: Keep-alive
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Wake Render
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          for i in 1 2 3; do
+            STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              'https://super-toto-local-up1d.onrender.com/api/health') && break
+            sleep 5
+          done
+          echo "Health check: $STATUS"
+          test "$STATUS" = '200'
