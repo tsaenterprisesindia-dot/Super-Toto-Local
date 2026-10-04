@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { SocketProvider } from './context/SocketContext.jsx';
+import { NotificationProvider } from './context/NotificationContext.jsx';
 import { FaceProvider } from './context/FaceProvider.jsx';
 import './i18n.js';
 import './index.css';
@@ -19,9 +20,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <SocketProvider>
-          <FaceProvider>
-            <App />
-          </FaceProvider>
+          <NotificationProvider>
+            <FaceProvider>
+              <App />
+            </FaceProvider>
+          </NotificationProvider>
         </SocketProvider>
       </AuthProvider>
     </BrowserRouter>

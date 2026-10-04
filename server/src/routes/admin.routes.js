@@ -10,6 +10,7 @@ import { SafetyEvent } from '../models/SafetyEvent.js';
 import { Promo } from '../models/Promo.js';
 import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
+import { notifyUser } from '../services/notify.js';
 
 export default function adminRoutes(io) {
   const router = Router();
@@ -176,6 +177,17 @@ export default function adminRoutes(io) {
       if (driver.driverStatus !== 'approved') driver.isOnline = false;
       if (driver.isHidden) driver.isOnline = false;
       await driver.save();
+      const notifyMsg = {
+        approve: { title: 'Account approved', message: 'Congratulations! Your driver account is approved. Go online to start earning.', link: '/driver' },
+        block: { title: 'Account blocked', message: 'Your driver account has been blocked. Please contact support.', link: '/driver' },
+        unblock: { title: 'Account unblocked', message: 'Your driver account has been unblocked. You may go online now.', link: '/driver' },
+        hide: { title: 'Account deactivated', message: 'Your account has been deactivated. Please contact support.', link: '/driver' },
+        unhide: { title: 'Account reactivated', message: 'Your account has been reactivated. Welcome back!', link: '/driver' },
+        reinstate: { title: 'Account reinstated', message: 'Your account has been reinstated. You may go online now.', link: '/driver' },
+      }[action];
+      if (notifyMsg) {
+        notifyUser({ io, userId: driver._id, type: 'account', ...notifyMsg });
+      }
       res.json({ driver: driver.toSafeJSON() });
     } catch (err) {
       next(err);
@@ -194,6 +206,14 @@ export default function adminRoutes(io) {
       if (!user) return res.status(404).json({ message: 'User not found' });
       user.warnings.push({ message: message.trim(), issuedAt: new Date(), issuedBy: req.userDoc._id });
       await user.save();
+      notifyUser({
+        io,
+        userId: user._id,
+        type: 'warning',
+        title: 'Warning issued',
+        message: message.trim(),
+        link: user.role === 'driver' ? '/driver' : '/ride',
+      });
       res.json({ user: user.toSafeJSON(), message: 'Warning issued' });
     } catch (err) { next(err); }
   });
@@ -241,6 +261,15 @@ export default function adminRoutes(io) {
       };
       user.isOnline = false; // force offline on suspension
       await user.save();
+      const untilLabel = until ? ` until ${new Date(until).toLocaleDateString('en-IN')}` : '';
+      notifyUser({
+        io,
+        userId: user._id,
+        type: 'suspension',
+        title: 'Service suspended',
+        message: `Your account has been suspended${untilLabel}: ${user.suspension.reason}`,
+        link: user.role === 'driver' ? '/driver' : '/ride',
+      });
       res.json({ user: user.toSafeJSON(), message: 'User suspended' });
     } catch (err) { next(err); }
   });
@@ -255,6 +284,14 @@ export default function adminRoutes(io) {
       user.isHidden = false;
       if (user.role === 'driver') user.driverStatus = 'approved';
       await user.save();
+      notifyUser({
+        io,
+        userId: user._id,
+        type: 'account',
+        title: 'Account reinstated',
+        message: 'Your account has been reinstated. Welcome back!',
+        link: user.role === 'driver' ? '/driver' : '/ride',
+      });
       res.json({ user: user.toSafeJSON(), message: 'User reinstated' });
     } catch (err) { next(err); }
   });
@@ -389,6 +426,16 @@ export default function adminRoutes(io) {
       if (action === 'reject') doc.rejectionReason = (rejectionReason || '').trim() || 'Does not meet requirements';
 
       await user.save();
+      notifyUser({
+        io,
+        userId: user._id,
+        type: 'document',
+        title: action === 'approve' ? 'Document approved' : 'Document rejected',
+        message: action === 'approve'
+          ? `Your ${doc.type.toUpperCase()} document was approved.`
+          : `Your ${doc.type.toUpperCase()} document was rejected: ${doc.rejectionReason}`,
+        link: '/driver/documents',
+      });
       res.json({ document: doc, message: `Document ${action === 'approve' ? 'approved' : 'rejected'}` });
     } catch (err) { next(err); }
   });
@@ -445,6 +492,16 @@ export default function adminRoutes(io) {
       }
 
       await user.save();
+      notifyUser({
+        io,
+        userId: user._id,
+        type: 'document',
+        title: action === 'approve' ? 'Document approved' : 'Document rejected',
+        message: action === 'approve'
+          ? `Your ${doc.type.toUpperCase()} document was approved.`
+          : `Your ${doc.type.toUpperCase()} document was rejected: ${doc.rejectionReason}`,
+        link: '/profile',
+      });
       res.json({ document: doc, message: `Document ${action === 'approve' ? 'approved' : 'rejected'}` });
     } catch (err) { next(err); }
   });

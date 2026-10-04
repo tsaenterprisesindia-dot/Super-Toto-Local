@@ -12,6 +12,7 @@ import {
 } from '../utils/pricing.js';
 import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
 import { settleCashDue } from '../services/cashSettlement.js';
+import { notifyUser, notifyAdmins } from '../services/notify.js';
 import { getRoute } from '../utils/route.js';
 import { validatePromo, computePromoDiscount, redeemPromo, recordRedemption } from '../services/promo.js';
 import { CashLedger } from '../models/CashLedger.js';
@@ -604,6 +605,16 @@ export default function rideRoutes(io) {
       await ride.save();
 
       emitRideUpdate(io, ride._id);
+      if (ride.driver) {
+        notifyUser({
+          io,
+          userId: ride.driver,
+          type: 'ride',
+          title: 'Ride cancelled by rider',
+          message: `The ${ride.pickup?.address || 'trip'} request was cancelled. You are back online for new requests.`,
+          link: '/driver',
+        });
+      }
       res.json({ message: 'Ride cancelled', cancellationFee: ride.cancellationFee });
     } catch (err) {
       next(err);
@@ -915,6 +926,13 @@ export default function rideRoutes(io) {
         .lean();
 
       io.to('admins').emit('sos:new', dto);
+      notifyAdmins({
+        io,
+        type: 'safety',
+        title: '🚨 SOS raised',
+        message: `${dto.rider?.name || 'A rider'} pressed SOS during a ride. Take action in Safety Center.`,
+        link: '/admin/sos',
+      });
       res.status(201).json({ event: dto });
     } catch (err) {
       next(err);

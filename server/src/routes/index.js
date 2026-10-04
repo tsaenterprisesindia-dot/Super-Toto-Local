@@ -7,6 +7,7 @@ import riderRoutes from './rider.routes.js';
 import adminRoutes from './admin.routes.js';
 import chatbotRoutes from './chatbot.routes.js';
 import feedbackRoutes from './feedback.routes.js';
+import notificationRoutes from './notification.routes.js';
 import Ride from '../models/Ride.js';
 import { haversineKm } from '../utils/pricing.js';
 import { getFeedbackConfig, getAdsConfig, getSafetyTipsConfig, getBikeTaxiConfig, getUpiConfig, getContactConfig, getChatbotConfig, getSeatBookingConfig, getComplianceConfig, resolveFarePolicy, INDIA_STATES, stateName } from '../services/settings.js';
@@ -64,9 +65,10 @@ export default function routes(io) {
 
   router.use('/rides', rideRoutes(io));
   router.use('/driver', driverRoutes(io));
-  router.use('/rider', riderRoutes());
+  router.use('/rider', riderRoutes(io));
   router.use('/chatbot', chatbotRoutes());
   router.use('/feedback', feedbackRoutes());
+  router.use('/notifications', notificationRoutes());
   router.use('/admin', adminRoutes(io));
   router.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
   // Public feedback config — riders/drivers need this to show/hide review panel

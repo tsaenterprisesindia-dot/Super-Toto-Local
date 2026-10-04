@@ -6,6 +6,7 @@ import fs from 'fs';
 import User from '../models/User.js';
 import { SavedPlace } from '../models/SavedPlace.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { notifyUser } from '../services/notify.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -37,7 +38,7 @@ const upload = multer({
 
 const REQUIRED_RIDER_DOCS = ['aadhaar'];
 
-export default function riderRoutes() {
+export default function riderRoutes(io) {
   const router = Router();
   router.use(requireAuth, requireRole('rider'));
 
@@ -131,6 +132,14 @@ export default function riderRoutes() {
         at: new Date(),
       });
       await user.save();
+      notifyUser({
+        io,
+        userId: user._id,
+        type: 'wallet',
+        title: 'Wallet recharged',
+        message: `₹${amount.toLocaleString('en-IN')} added to your wallet. New balance ₹${Math.round(user.wallet.balance * 100) / 100}.`,
+        link: '/ride',
+      });
       res.json({
         message: `₹${amount.toLocaleString('en-IN')} added to your wallet`,
         balance: Math.round(user.wallet.balance * 100) / 100,

@@ -12,6 +12,7 @@ import { getComplianceConfig, getRequiredDriverDocs } from '../services/settings
 import { faceMatch } from '../utils/pricing.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { addCashCollection, settleCashDue, cashStatus, maybeSendCashReminder, platformShareOf } from '../services/cashSettlement.js';
+import { notifyUser } from '../services/notify.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -216,6 +217,14 @@ export default function driverRoutes(io) {
 
       const dto = await toRideDTO(ride._id);
       emitRideUpdate(io, ride._id);
+      notifyUser({
+        io,
+        userId: ride.rider,
+        type: 'ride',
+        title: 'Driver accepted your ride',
+        message: `${req.userDoc.name || 'Your driver'} is on their way. Tap to track live.`,
+        link: '/ride',
+      });
       res.json({ ride: dto });
     } catch (err) {
       next(err);
@@ -310,6 +319,14 @@ export default function driverRoutes(io) {
       req.ride.startedAt = new Date();
       await req.ride.save();
       emitRideUpdate(io, req.ride._id);
+      notifyUser({
+        io,
+        userId: req.ride.rider,
+        type: 'ride',
+        title: 'Your ride started',
+        message: 'Your driver is on the way to your destination. Enjoy the ride!',
+        link: '/ride',
+      });
       res.json({ ride: await toRideDTO(req.ride._id) });
     } catch (err) {
       next(err);
@@ -334,6 +351,23 @@ export default function driverRoutes(io) {
         },
       });
       emitRideUpdate(io, req.ride._id);
+      const total = req.ride.fareBreakup?.total || req.ride.fare || 0;
+      notifyUser({
+        io,
+        userId: req.ride.rider,
+        type: 'payment',
+        title: 'Ride completed',
+        message: `Your trip is complete. Total fare ₹${total.toLocaleString('en-IN')}. Please pay your driver.`,
+        link: '/history',
+      });
+      notifyUser({
+        io,
+        userId: req.user.id,
+        type: 'earnings',
+        title: 'Ride completed — earnings added',
+        message: `You earned ₹${(req.ride.fareBreakup?.driverEarnings || 0).toLocaleString('en-IN')} for this trip.`,
+        link: '/driver',
+      });
       res.json({ ride: await toRideDTO(req.ride._id) });
     } catch (err) {
       next(err);

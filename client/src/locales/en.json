@@ -338,5 +338,10 @@
       "resolved": "resolved",
       "closed": "closed"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all read",
+    "empty": "No notifications yet. You'll see trip, payment and account updates here."
   }
 }

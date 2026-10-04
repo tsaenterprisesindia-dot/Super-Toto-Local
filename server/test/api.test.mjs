@@ -362,3 +362,53 @@ test('admin stats and promos endpoints respond', async () => {
   assert.equal(promos.status, 200);
   assert.ok(promos.data.promos?.some((p) => p.code === 'WELCOME10'), 'WELCOME10 promo is seeded');
 });
+
+// ------------------------------------------------------------ notifications
+test('notification endpoints: list, unread count, mark read, read-all', async () => {
+  // The previous ride-flow test fired several notifications at the rider
+  // (ride accepted / started / completed, wallet recharge). Give the
+  // fire-and-forget writers a moment to land, then verify them.
+  let list = null;
+  for (let i = 0; i < 20; i++) {
+    const r = await api('GET', '/notifications', null, tokens.rider);
+    assert.equal(r.status, 200);
+    list = r.data.notifications || [];
+    if (list.length >= 4) break;
+    await wait(250);
+  }
+  assert.ok(list.length >= 4, `rider has trip + wallet notifications (got ${list.length})`);
+  assert.ok(list.some((n) => n.type === 'wallet'), 'wallet recharge notification exists');
+  assert.ok(list.some((n) => n.type === 'ride'), 'ride notification exists');
+
+  const un = await api('GET', '/notifications/unread-count', null, tokens.rider);
+  assert.equal(un.status, 200);
+  assert.ok(un.data.count >= 1, 'at least one unread notification');
+
+  // unauthenticated access is rejected
+  const anon = await api('GET', '/notifications', null, null);
+  assert.equal(anon.status, 401);
+
+  // mark one as read
+  const first = list.find((n) => !n.read) || list[0];
+  const readOne = await api('POST', `/notifications/${first.id}/read`, {}, tokens.rider);
+  assert.equal(readOne.status, 200);
+
+  // mark-all-read returns an update count and the count then drops to 0
+  const readAll = await api('POST', '/notifications/read-all', {}, tokens.rider);
+  assert.equal(readAll.status, 200);
+  assert.ok(readAll.data.updated >= 1);
+  const un2 = await api('GET', '/notifications/unread-count', null, tokens.rider);
+  assert.equal(un2.data.count, 0);
+
+  // admin received a persisted SOS notification from the ride-flow test
+  let adminList = [];
+  for (let i = 0; i < 20; i++) {
+    const r = await api('GET', '/notifications', null, tokens.admin);
+    if ((r.data.notifications || []).some((n) => n.type === 'safety')) {
+      adminList = r.data.notifications;
+      break;
+    }
+    await wait(250);
+  }
+  assert.ok(adminList.some((n) => n.type === 'safety'), 'admin got the SOS notification');
+});
