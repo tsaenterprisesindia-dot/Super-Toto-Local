@@ -8,7 +8,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
 import { Promo } from '../models/Promo.js';
-import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
+import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, getEmergencyConfig, saveEmergencyConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 import { notifyUser } from '../services/notify.js';
 
@@ -603,6 +603,20 @@ export default function adminRoutes(io) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // --- Emergency helplines configuration (admin only) ---
+  router.get('/emergency-config', async (_req, res, next) => {
+    try {
+      res.json({ emergency: await getEmergencyConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/emergency-config', async (req, res, next) => {
+    try {
+      const emergency = await saveEmergencyConfig(req.body);
+      res.json({ emergency, message: 'Emergency helpline config updated' });
+    } catch (err) { next(err); }
   });
 
   // --- Feedback / Review configuration (admin only) ---

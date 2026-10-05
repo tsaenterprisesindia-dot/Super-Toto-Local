@@ -307,6 +307,8 @@ test('full ride lifecycle: book -> accept -> share+sos -> verify-face gate -> st
   // raise SOS during the trip
   const sos = await api('POST', `/rides/${rid}/sos`, { message: 'test' }, tokens.rider);
   assert.equal(sos.status, 201);
+  assert.ok(sos.data.emergency, 'SOS response should carry emergency helplines');
+  assert.ok(sos.data.emergency.helplines.some((h) => h.number === '112'), 'unified 112 must be present');
 
   // face-verify gate: seed driver has no enrolled face -> 409
   const dimension = new Array(128).fill(0.01);
@@ -411,4 +413,59 @@ test('notification endpoints: list, unread count, mark read, read-all', async ()
     await wait(250);
   }
   assert.ok(adminList.some((n) => n.type === 'safety'), 'admin got the SOS notification');
+});
+
+// ------------------------------------------------------------ emergency config
+test('emergency helplines: public config, admin read/update, persistence', async () => {
+  // public, no auth
+  const pub = await api('GET', '/emergency-config', null, null);
+  assert.equal(pub.status, 200);
+  assert.ok(pub.data.emergency.helplines.length >= 5, 'default India helplines present');
+  assert.ok(pub.data.emergency.helplines.some((h) => h.number === '100'), 'police 100');
+  assert.ok(pub.data.emergency.helplines.some((h) => h.number === '108'), 'ambulance 108');
+  assert.ok(pub.data.emergency.helplines.some((h) => h.number === '101'), 'fire 101');
+
+  // admin can read it
+  const adminGet = await api('GET', '/admin/emergency-config', null, tokens.admin);
+  assert.equal(adminGet.status, 200);
+
+  // admin can update (add a custom local number, disable call actions)
+  const put = await api('PUT', '/admin/emergency-config', {
+    enabled: true,
+    callActions: false,
+    note: 'updated note',
+    helplines: [
+      { id: 'local', label: 'Local Contact', number: '9119234' },
+      { id: 'unified', label: 'Unified National Emergency', number: '112' },
+    ],
+  }, tokens.admin);
+  assert.equal(put.status, 200);
+
+  const again = await api('GET', '/emergency-config', null, null);
+  assert.equal(again.data.emergency.callActions, false);
+  assert.ok(again.data.emergency.helplines.some((h) => h.number === '112'));
+  assert.ok(again.data.emergency.helplines.some((h) => h.number === '9119234'));
+
+  // non-admin cannot update
+  const denied = await api('PUT', '/admin/emergency-config', { helplines: [] }, tokens.rider);
+  assert.equal(denied.status, 403, 'only admins can edit');
+
+  // restore defaults for a clean state
+  const restore = await api('PUT', '/admin/emergency-config', {
+    enabled: true,
+    callActions: true,
+    helplines: [
+      { label: 'Police — National Emergency', number: '100', icon: '👮' },
+      { label: 'Fire Brigade', number: '101', icon: '🚒' },
+      { label: 'Ambulance (Emergency)', number: '108', icon: '🚑' },
+      { label: 'Health Help / Ambulance', number: '102', icon: '🏥' },
+      { label: 'Unified National Emergency (Police/Ambulance/Fire)', number: '112', icon: '🆘' },
+      { label: 'Women Helpline', number: '1091', icon: '🚺' },
+      { label: 'Child Helpline', number: '1098', icon: '🧒' },
+      { label: 'Disaster Management', number: '1078', icon: '🌊' },
+      { label: 'Senior Citizens Helpline', number: '14567', icon: '🧓' },
+      { label: 'Cyber Crime Helpline', number: '1930', icon: '🖥️' },
+    ],
+  }, tokens.admin);
+  assert.equal(restore.status, 200);
 });

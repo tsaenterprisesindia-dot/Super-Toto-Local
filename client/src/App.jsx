@@ -38,6 +38,7 @@ import AdminSafetyTips from './pages/admin/AdminSafetyTips.jsx';
 import AdminBikeTaxi from './pages/admin/AdminBikeTaxi.jsx';
 import AdminFeedback from './pages/admin/AdminFeedback.jsx';
 import AdminCompliance from './pages/admin/AdminCompliance.jsx';
+import AdminEmergency from './pages/admin/AdminEmergency.jsx';
 import AdminStateFares from './pages/admin/AdminStateFares.jsx';
 
 function Protected({ children, roles }) {
@@ -181,6 +182,7 @@ export default function App() {
         <Route path="bike-taxi" element={<AdminBikeTaxi />} />
         <Route path="feedback" element={<AdminFeedback />} />
         <Route path="compliance" element={<AdminCompliance />} />
+        <Route path="emergency" element={<AdminEmergency />} />
         <Route path="state-fares" element={<AdminStateFares />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>

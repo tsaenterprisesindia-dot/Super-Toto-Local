@@ -668,6 +668,28 @@ tr:hover td { background: #fafbfd; }
 .modal-box h3 { margin: 0 0 12px; font-size: 16px; }
 .modal-actions { display: flex; gap: 8px; margin-top: 14px; }
 
+/* ---------- Emergency helplines (SOS) -------------------------------------- */
+.sos-helplines { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.sos-helpline {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border: 1px solid #eee;
+  border-radius: 10px; text-decoration: none; background: #fafafa;
+  transition: background .12s ease, border-color .12s ease;
+}
+.sos-helpline:hover, .sos-helpline:focus { background: #fff3f3; border-color: var(--danger, #e52b2b); }
+.sos-helpline-icon { font-size: 18px; }
+.sos-helpline-body { display: flex; flex-direction: column; min-width: 0; }
+.sos-helpline-label { font-size: 12px; color: var(--muted, #777); line-height: 1.25; }
+.sos-helpline-num { font-size: 16px; font-weight: 700; color: var(--text, #111); }
+.sos-helpline-call { margin-left: auto; font-size: 16px; color: var(--danger, #e52b2b); }
+.sos-helpline-primary {
+  background: var(--danger, #e52b2b); border-color: var(--danger, #e52b2b);
+}
+.sos-helpline-primary .sos-helpline-label,
+.sos-helpline-primary .sos-helpline-num,
+.sos-helpline-primary .sos-helpline-call { color: #fff; }
+.sos-helpline-primary:hover, .sos-helpline-primary:focus { background: #c72828; border-color: #c72828; }
+
 /* ---------- Suspension page (403) --------------------------------------- */
 .suspended-page {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

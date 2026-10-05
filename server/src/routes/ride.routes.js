@@ -10,7 +10,7 @@ import {
   computeSurge,
   computeLuggageCharge,
 } from '../utils/pricing.js';
-import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
+import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
 import { settleCashDue } from '../services/cashSettlement.js';
 import { notifyUser, notifyAdmins } from '../services/notify.js';
 import { getRoute } from '../utils/route.js';
@@ -933,7 +933,23 @@ export default function rideRoutes(io) {
         message: `${dto.rider?.name || 'A rider'} pressed SOS during a ride. Take action in Safety Center.`,
         link: '/admin/sos',
       });
-      res.status(201).json({ event: dto });
+
+      // Attach official India emergency helplines so one-tap dialing is available
+      // instantly, and ping the rider with quick-contact numbers.
+      let emergency = { enabled: true, callActions: true, helplines: [] };
+      try { emergency = await getEmergencyConfig(); } catch {}
+      const quick = (emergency.helplines || []).slice(0, 4);
+      notifyUser({
+        io,
+        userId: req.user.id,
+        type: 'safety',
+        title: '🚨 SOS sent — emergency helplines',
+        message: quick.length
+          ? `Call ${quick.map((h) => `${h.label} ${h.number}`).join(' · ')}`
+          : 'Your location has been shared with the monitoring team.',
+        link: '/ride',
+      });
+      res.status(201).json({ event: dto, emergency });
     } catch (err) {
       next(err);
     }

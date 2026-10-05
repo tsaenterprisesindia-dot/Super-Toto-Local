@@ -238,7 +238,8 @@
     "arrivedPickup": "📍 मैं पिकअप पर पहुंच गया हूं",
     "startTrip": "▶️ ट्रिप शुरू करें",
     "completeEarn": "✅ ट्रिप पूरी करें · {{amount}} कमाएं",
-    "confirmCash": "💵 कैश वसूली की पुष्टि करें · {{amount}}"
+    "confirmCash": "💵 कैश वसूली की पुष्टि करें · {{amount}}",
+    "sosHelplineTitle": "📞 आपातकालीन हेल्पलाइन — एक टैप कॉल"
   },
   "notifications": {
     "title": "सूचनाएं",

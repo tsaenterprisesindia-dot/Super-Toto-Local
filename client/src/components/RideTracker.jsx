@@ -39,6 +39,42 @@ function StarPicker({ value, onChange, disabled }) {
   );
 }
 
+// One-tap dial buttons for official India emergency helplines. The unified 112
+// (works for police/ambulance/fire, even without a working SIM) is shown first.
+function HelplinePanel({ t, emergency }) {
+  const all = (emergency?.helplines || []).filter((h) => h && String(h.number || '').trim());
+  if (!all.length && emergency?.callActions === false) return null;
+  const ordered = [...all];
+  const unified = ordered.findIndex((h) => h.number === '112');
+  if (unified > 0) {
+    const [u] = ordered.splice(unified, 1);
+    ordered.unshift(u);
+  }
+  const shown = ordered.slice(0, 6);
+  return (
+    <div className="sos-emergency" style={{ marginTop: 4, marginBottom: 12 }}>
+      <div className="small" style={{ fontWeight: 600, marginBottom: 6 }}>
+        {t('tracker.sosHelplineTitle')}
+      </div>
+      {emergency?.note && (
+        <div className="small muted" style={{ marginBottom: 8 }}>{emergency.note}</div>
+      )}
+      <div className="sos-helplines">
+        {shown.map((h) => (
+          <a key={h.id || h.number} className={`sos-helpline${h.number === '112' ? ' sos-helpline-primary' : ''}`} href={`tel:${h.number}`}>
+            <span className="sos-helpline-icon">{h.icon || '📞'}</span>
+            <span className="sos-helpline-body">
+              <span className="sos-helpline-label">{h.label}</span>
+              <span className="sos-helpline-num">{h.number}</span>
+            </span>
+            <span className="sos-helpline-call">📞</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function RideTracker({ ride, role, driverPos, setRide, socket }) {
   const { t } = useTranslation();
   const face = useFace();
@@ -62,6 +98,7 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
   const [sosBusy, setSosBusy] = useState(false);
   const [sosSent, setSosSent] = useState(false);
   const [sosErr, setSosErr] = useState('');
+  const [emergency, setEmergency] = useState(null);
   const [shareBusy, setShareBusy] = useState(false);
   const [shareErr, setShareErr] = useState('');
 
@@ -155,7 +192,8 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
     setSosBusy(true);
     setSosErr('');
     try {
-      await client.post(`/rides/${ride._id}/sos`, { message: sosMsg });
+      const { data } = await client.post(`/rides/${ride._id}/sos`, { message: sosMsg });
+      if (data?.emergency) setEmergency(data.emergency);
       setSosSent(true);
       setTimeout(() => {
         setSosOpen(false);
@@ -169,6 +207,16 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
       setSosBusy(false);
     }
   };
+
+  // Load official India emergency helplines so one-tap dialing is available the
+  // moment the SOS modal opens (fresh copy from server; SOS response also refreshes it).
+  useEffect(() => {
+    if (!sosOpen || emergency) return;
+    client
+      .get('/emergency-config')
+      .then(({ data }) => data?.emergency && setEmergency(data.emergency))
+      .catch(() => {});
+  }, [sosOpen, emergency]);
 
   const toggleShare = async (enabled) => {
     setShareBusy(true);
@@ -752,6 +800,9 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
               <div className="alert alert-green" style={{ marginBottom: 0 }}>
                 {t('tracker.sosSentBody')}
               </div>
+              {emergency?.enabled !== false && (
+                <HelplinePanel t={t} emergency={emergency} />
+              )}
             </div>
           ) : (
             <div>
@@ -771,6 +822,9 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
                 />
               </div>
               {sosErr && <div className="err-box" style={{ marginBottom: 10 }}>{sosErr}</div>}
+              {emergency?.enabled !== false && (
+                <HelplinePanel t={t} emergency={emergency} />
+              )}
               <div className="modal-actions">
                 <button type="button" className="btn" onClick={() => setSosOpen(false)} disabled={sosBusy}>
                   {t('tracker.cancel')}

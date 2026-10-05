@@ -297,6 +297,7 @@
     "sosSending": "Sending…",
     "sosSentTitle": "SOS sent",
     "sosSentBody": "✅ The monitoring team has been alerted with your live location.",
+    "sosHelplineTitle": "📞 Emergency helplines — one-tap call",
     "cancel": "Cancel"
   },
   "feedback": {

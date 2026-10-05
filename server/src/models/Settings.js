@@ -52,6 +52,10 @@ const settingsSchema = new mongoose.Schema(
       type: Object,
       default: {},
     },
+    emergencyConfig: {
+      type: Object,
+      default: {},
+    },
     stateFares: {
       type: Object,
       default: {},

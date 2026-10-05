@@ -19,6 +19,7 @@ const LINKS = [
   { to: '/admin/bike-taxi', label: '🏍️ Bike Taxi' },
   { to: '/admin/feedback', label: '💬 Feedback' },
   { to: '/admin/compliance', label: '🗂️ Compliance' },
+  { to: '/admin/emergency', label: '🆘 Helplines' },
   { to: '/admin/settings', label: '⚙️ Settings' },
 ];
 

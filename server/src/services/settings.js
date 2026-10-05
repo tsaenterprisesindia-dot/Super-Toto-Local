@@ -587,6 +587,59 @@ export async function saveContactConfig(input = {}) {
   return { ...CONTACT_DEFAULTS, ...clean };
 }
 
+// ─── Emergency Helplines (India) ──────────────────────────────────────────────
+// Official GoI emergency numbers surfaced in the SOS flow with one-tap dial. The
+// unified 112 works for police/ambulance/fire from any phone (incl. sim-less).
+
+export const EMERGENCY_DEFAULTS = {
+  enabled: true,
+  callActions: true,
+  note: 'Call the nearest applicable helpline. Your real-time trip location has also been shared with our monitoring team.',
+  helplines: [
+    { id: 'police',    label: 'Police — National Emergency',       number: '100',  icon: '👮' },
+    { id: 'fire',      label: 'Fire Brigade',                      number: '101',  icon: '🚒' },
+    { id: 'ambulance', label: 'Ambulance (Emergency)',             number: '108',  icon: '🚑' },
+    { id: 'ambulance2',label: 'Health Help / Ambulance',           number: '102',  icon: '🏥' },
+    { id: 'unified',   label: 'Unified National Emergency (Police/Ambulance/Fire)', number: '112', icon: '🆘' },
+    { id: 'women',     label: 'Women Helpline',                    number: '1091', icon: '🚺' },
+    { id: 'child',     label: 'Child Helpline',                    number: '1098', icon: '🧒' },
+    { id: 'disaster',  label: 'Disaster Management',               number: '1078', icon: '🌊' },
+    { id: 'elderly',   label: 'Senior Citizens Helpline',          number: '14567', icon: '🧓' },
+    { id: 'cyber',     label: 'Cyber Crime Helpline',              number: '1930', icon: '🖥️' },
+  ],
+};
+
+export async function getEmergencyConfig() {
+  const doc = await Settings.findOne();
+  const stored = doc?.emergencyConfig || {};
+  const merged = { ...EMERGENCY_DEFAULTS, ...stored };
+  if (!Array.isArray(merged.helplines) || !merged.helplines.length) merged.helplines = EMERGENCY_DEFAULTS.helplines;
+  return merged;
+}
+
+export async function saveEmergencyConfig(input = {}) {
+  const doc = (await Settings.findOne()) || new Settings();
+  const cur = await getEmergencyConfig();
+  const clean = { ...cur };
+  if (input.enabled !== undefined) clean.enabled = input.enabled === true || input.enabled === 'true';
+  if (input.callActions !== undefined) clean.callActions = input.callActions === true || input.callActions === 'true';
+  if (typeof input.note === 'string' && input.note.trim()) clean.note = input.note.trim();
+  if (Array.isArray(input.helplines)) {
+    clean.helplines = input.helplines
+      .filter((h) => h && typeof h === 'object' && String(h.number || '').trim())
+      .map((h) => ({
+        id: String(h.id || h.label || h.number).trim().toLowerCase().replace(/\s+/g, '-'),
+        label: String(h.label || h.number).trim(),
+        number: String(h.number).trim(),
+        icon: String(h.icon || '📞').trim() || '📞',
+      }));
+    if (!clean.helplines.length) clean.helplines = EMERGENCY_DEFAULTS.helplines;
+  }
+  doc.emergencyConfig = clean;
+  await doc.save();
+  return clean;
+}
+
 export const CHATBOT_DEFAULTS = {
   enabled: true,
   botName: 'Toto Assist',

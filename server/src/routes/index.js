@@ -10,7 +10,7 @@ import feedbackRoutes from './feedback.routes.js';
 import notificationRoutes from './notification.routes.js';
 import Ride from '../models/Ride.js';
 import { haversineKm } from '../utils/pricing.js';
-import { getFeedbackConfig, getAdsConfig, getSafetyTipsConfig, getBikeTaxiConfig, getUpiConfig, getContactConfig, getChatbotConfig, getSeatBookingConfig, getComplianceConfig, resolveFarePolicy, INDIA_STATES, stateName } from '../services/settings.js';
+import { getFeedbackConfig, getAdsConfig, getSafetyTipsConfig, getBikeTaxiConfig, getUpiConfig, getContactConfig, getChatbotConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, resolveFarePolicy, INDIA_STATES, stateName } from '../services/settings.js';
 
 export default function routes(io) {
   const router = Router();
@@ -87,6 +87,12 @@ export default function routes(io) {
     try {
       res.json({ safetyTips: await getSafetyTipsConfig() });
     } catch (err) { res.json({ safetyTips: { riderEnabled: true, driverEnabled: true, riderTips: [], driverTips: [] } }); }
+  });
+  // Public: India emergency helpline numbers surfaced inside the SOS flow
+  router.get('/emergency-config', async (_req, res) => {
+    try {
+      res.json({ emergency: await getEmergencyConfig() });
+    } catch (err) { res.json({ emergency: { enabled: true, helplines: [] } }); }
   });
   router.get('/bike-taxi-config', async (_req, res) => {
     try {
