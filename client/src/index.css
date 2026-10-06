@@ -530,6 +530,8 @@ tr:hover td { background: #fafbfd; }
 .admin-nav-link:hover { background: var(--bg); color: var(--ink); }
 .admin-nav-link.active { background: var(--brand-light); color: var(--brand-dark); }
 .admin-side-footer { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.admin-side-actions { display: flex; align-items: center; gap: 6px; }
+.admin-side-actions .tt-fab.tt-inline { margin-right: 0; }
 .admin-user { display: flex; align-items: center; gap: 9px; }
 .admin-main { flex: 1; padding: 24px 28px; max-width: 1200px; }
 

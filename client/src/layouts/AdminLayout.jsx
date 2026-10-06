@@ -66,8 +66,10 @@ export default function AdminLayout() {
               <div className="small muted">Administrator</div>
             </div>
           </div>
-          <TutorialPlayer inline />
-          <NotificationBell />
+          <div className="admin-side-actions">
+            <TutorialPlayer inline />
+            <NotificationBell />
+          </div>
           <button className="logout-btn" onClick={doLogout}>
             Log out
           </button>
