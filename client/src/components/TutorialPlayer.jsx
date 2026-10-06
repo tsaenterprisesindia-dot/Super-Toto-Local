@@ -21,7 +21,7 @@ function pickVoice() {
   return en.find((v) => (v.lang || '').includes('-IN')) || en.find((v) => (v.lang || '').includes('-GB')) || en[0] || null;
 }
 
-export default function TutorialPlayer() {
+export default function TutorialPlayer({ inline = false }) {
   const { user } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -165,7 +165,12 @@ export default function TutorialPlayer() {
   return (
     <>
       {!tourId && (
-        <button className="tt-fab" onClick={() => setOpen((o) => !o)} aria-label={t('tutorial.fab')} title={t('tutorial.fab')}>
+        <button
+          className={`tt-fab${inline ? ' tt-inline' : ''}`}
+          onClick={() => setOpen((o) => !o)}
+          aria-label={t('tutorial.fab')}
+          title={t('tutorial.fab')}
+        >
           🎬
         </button>
       )}

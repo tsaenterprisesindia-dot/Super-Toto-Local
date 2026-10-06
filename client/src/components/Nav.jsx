@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import client from '../api/client.js';
 import LanguageSwitcher from './LanguageSwitcher.jsx';
 import NotificationBell from './NotificationBell.jsx';
+import TutorialPlayer from './TutorialPlayer.jsx';
 import logo from '../assets/super-toto-logo.png';
 
 export default function Nav() {
@@ -83,6 +84,7 @@ export default function Nav() {
           <span className="avatar">{user?.name?.[0]?.toUpperCase()}</span>
           <span className="small muted">{user?.name}</span>
         </div>
+        <TutorialPlayer inline />
         <NotificationBell />
         {user?.role !== 'admin' && <LanguageSwitcher />}
         <button className="logout-btn" onClick={doLogout}>

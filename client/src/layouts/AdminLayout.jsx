@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import NotificationBell from '../components/NotificationBell.jsx';
+import TutorialPlayer from '../components/TutorialPlayer.jsx';
 import logo from '../assets/super-toto-logo.png';
 
 const LINKS = [
@@ -65,6 +66,7 @@ export default function AdminLayout() {
               <div className="small muted">Administrator</div>
             </div>
           </div>
+          <TutorialPlayer inline />
           <NotificationBell />
           <button className="logout-btn" onClick={doLogout}>
             Log out
