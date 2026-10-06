@@ -66,10 +66,6 @@ export default function AdminLayout() {
               <div className="small muted">Administrator</div>
             </div>
           </div>
-          <div className="admin-side-actions">
-            <TutorialPlayer inline />
-            <NotificationBell />
-          </div>
           <button className="logout-btn" onClick={doLogout}>
             Log out
           </button>
@@ -77,6 +73,13 @@ export default function AdminLayout() {
       </aside>
 
       <main className="admin-main" data-tt="admin-main">
+        <div className="admin-topbar">
+          <span className="admin-topbar-title">Console</span>
+          <div className="admin-topbar-actions">
+            <TutorialPlayer inline />
+            <NotificationBell />
+          </div>
+        </div>
         <Outlet />
       </main>
     </div>

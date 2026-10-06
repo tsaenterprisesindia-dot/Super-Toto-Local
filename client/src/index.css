@@ -530,8 +530,20 @@ tr:hover td { background: #fafbfd; }
 .admin-nav-link:hover { background: var(--bg); color: var(--ink); }
 .admin-nav-link.active { background: var(--brand-light); color: var(--brand-dark); }
 .admin-side-footer { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
-.admin-side-actions { display: flex; align-items: center; gap: 6px; }
-.admin-side-actions .tt-fab.tt-inline { margin-right: 0; }
+.admin-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.admin-topbar-title { font-weight: 700; color: var(--muted, #64748b); font-size: 13px; letter-spacing: 0.4px; text-transform: uppercase; }
+.admin-topbar-actions { display: flex; align-items: center; gap: 6px; }
 .admin-user { display: flex; align-items: center; gap: 9px; }
 .admin-main { flex: 1; padding: 24px 28px; max-width: 1200px; }
 
@@ -1155,6 +1167,13 @@ tr:hover td { background: #fafbfd; }
   box-shadow: none;
   padding: 0;
   margin-right: 6px;
+}
+/* Tutorial picker opens from the top-right when launched from the nav/topbar */
+.tt-fab.tt-inline + .tt-menu {
+  left: auto;
+  right: 16px;
+  bottom: auto;
+  top: 58px;
 }
 .tt-fab.tt-inline:hover { transform: translateY(-1px); box-shadow: var(--shadow); }
 
