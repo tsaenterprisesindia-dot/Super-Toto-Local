@@ -11,6 +11,7 @@ import {
   computeLuggageCharge,
 } from '../utils/pricing.js';
 import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
+import { telephonyEnabled, sendEmergencyAlerts, publicUrl } from '../services/telephony.js';
 import { settleCashDue } from '../services/cashSettlement.js';
 import { notifyUser, notifyAdmins } from '../services/notify.js';
 import { getRoute } from '../utils/route.js';
@@ -949,6 +950,33 @@ export default function rideRoutes(io) {
           : 'Your location has been shared with the monitoring team.',
         link: '/ride',
       });
+
+      // Telephony gateway (opt-in): SMS the monitoring/emergency contacts with
+      // the live-tracking link and ring the ops bridge. Fire-and-forget so the
+      // rider response stays instant; outcome lands on the SafetyEvent record.
+      if (telephonyEnabled()) {
+        const trackLink = dto.ride?.shareToken ? `${publicUrl}/track/${dto.ride.shareToken}` : '';
+        const riderName = dto.rider?.name || 'A rider';
+        sendEmergencyAlerts({
+          riderName,
+          riderPhone: dto.rider?.phone || req.user.phone || '',
+          trackLink,
+          message: String(message || '').trim(),
+        })
+          .then((outcome) => {
+            event.telephony = {
+              provider: outcome.provider,
+              triggeredAt: new Date(),
+              status: outcome.detail ? 'done' : 'failed',
+              smsSent: outcome.sms.length,
+              callInitiated: outcome.calls.length > 0,
+              detail: outcome.detail,
+            };
+            return event.save();
+          })
+          .catch((e) => console.error('[telephony] SOS dispatch error:', e.message));
+      }
+
       res.status(201).json({ event: dto, emergency });
     } catch (err) {
       next(err);

@@ -110,6 +110,16 @@ export default function AdminSOS() {
                 <div className="err-box" style={{ color: 'inherit' }}>{e.message}</div>
               </div>
             )}
+            {e.telephony?.detail && (
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div className="small muted">📞 Emergency dispatch</div>
+                <span className="small" style={{ color: e.telephony.smsSent > 0 || e.telephony.callInitiated ? '#1e7e34' : 'var(--muted)' }}>
+                  {e.telephony.smsSent > 0 || e.telephony.callInitiated
+                    ? `✓ ${e.telephony.detail}`
+                    : `⚠ ${e.telephony.detail}`}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="row mt" style={{ gap: 8 }}>

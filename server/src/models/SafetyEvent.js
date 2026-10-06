@@ -20,6 +20,16 @@ const safetyEventSchema = new mongoose.Schema(
     resolvedAt: { type: Date, default: null },
     resolvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     resolutionNote: { type: String, default: '' },
+
+    // Gateway outcome (telephony service) recorded when alerts are dispatched
+    telephony: {
+      provider: { type: String, default: '' },
+      triggeredAt: { type: Date, default: null },
+      status: { type: String, default: '' }, // dispatched | done | failed
+      smsSent: { type: Number, default: 0 },
+      callInitiated: { type: Boolean, default: false },
+      detail: { type: String, default: '' },
+    },
   },
   { timestamps: true }
 );

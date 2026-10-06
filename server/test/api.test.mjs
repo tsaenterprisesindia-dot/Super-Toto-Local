@@ -81,7 +81,8 @@ before(async () => {
   child = spawn(process.execPath, ['src/index.js'], {
     cwd: SERVER_DIR,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, MONGODB_URI: '', PORT: String(port), NODE_ENV: 'test', OSRM_URL: 'http://127.0.0.1:9' },
+    env: { ...process.env, MONGODB_URI: '', PORT: String(port), NODE_ENV: 'test', OSRM_URL: 'http://127.0.0.1:9',
+      TELEPHONY_ENABLED: 'mock', TELEPHONY_OPS_PHONE: '+919811997286', TELEPHONY_EMERGENCY_CONTACTS: '+919811997287,+919811997288' },
   });
   child.stdout.on('data', () => {});
   child.stderr.on('data', () => {});
@@ -309,6 +310,20 @@ test('full ride lifecycle: book -> accept -> share+sos -> verify-face gate -> st
   assert.equal(sos.status, 201);
   assert.ok(sos.data.emergency, 'SOS response should carry emergency helplines');
   assert.ok(sos.data.emergency.helplines.some((h) => h.number === '112'), 'unified 112 must be present');
+
+  // telephony gateway (mock) dispatches SMS to emergency contacts + ops call;
+  // outcome is recorded on the SafetyEvent (fire-and-forget, so poll briefly)
+  let telephony = null;
+  for (let i = 0; i < 20; i++) {
+    const list = await api('GET', '/admin/sos', null, tokens.admin);
+    const ev = (list.data.active || []).find((e) => String(e.ride?._id) === rid || String(e.ride) === rid);
+    if (ev?.telephony?.detail) { telephony = ev.telephony; break; }
+    await wait(250);
+  }
+  assert.ok(telephony, 'SafetyEvent recorded a telephony outcome after SOS');
+  assert.equal(telephony.provider, 'mock');
+  assert.equal(telephony.smsSent, 2, 'SMS dispatched to both emergency contacts');
+  assert.equal(telephony.callInitiated, true, 'ops bridge call initiated');
 
   // face-verify gate: seed driver has no enrolled face -> 409
   const dimension = new Array(128).fill(0.01);
