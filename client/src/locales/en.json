@@ -343,6 +343,20 @@
   "notifications": {
     "title": "Notifications",
     "markAllRead": "Mark all read",
-    "empty": "No notifications yet. You'll see trip, payment and account updates here."
+    "empty": "No notifications yet. You'll see trip, payment and account updates here.",
+    "centerTitle": "Notification Center",
+    "subtitle": "All events that generated a notification for you, newest first.",
+    "total": "notifications",
+    "unread": "unread",
+    "filterAll": "All",
+    "filterUnread": "Unread",
+    "filterAllTypes": "All types",
+    "noUnread": "You're all caught up — no unread notifications. 🎉",
+    "clearAll": "Clear all",
+    "clearConfirm": "Delete all notifications? This cannot be undone.",
+    "clearDone": "Deleted {{deleted}} notification(s).",
+    "markAllDone": "All notifications marked as read ✓",
+    "removeOne": "Delete notification",
+    "loadMore": "Load more"
   }
 }

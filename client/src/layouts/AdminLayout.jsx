@@ -11,6 +11,7 @@ const LINKS = [
   { to: '/admin/reports', label: '💰 Reports' },
   { to: '/admin/cash', label: '💵 Cash Settlement' },
   { to: '/admin/sos', label: '🆘 SOS' },
+  { to: '/admin/notifications', label: '🔔 Notifications' },
   { to: '/admin/promos', label: '🏷️ Promos' },
   { to: '/admin/vehicle-rates', label: '🚗 Vehicle Rates' },
   { to: '/admin/state-fares', label: '🗺️ State Fares' },

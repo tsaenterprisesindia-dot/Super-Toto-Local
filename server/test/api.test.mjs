@@ -428,6 +428,38 @@ test('notification endpoints: list, unread count, mark read, read-all', async ()
     await wait(250);
   }
   assert.ok(adminList.some((n) => n.type === 'safety'), 'admin got the SOS notification');
+
+  // notification-center filters: unread-only (admin still has unread SOS), type-only, pagination
+  const unreadOnly = await api('GET', '/notifications?unread=true', null, tokens.admin);
+  assert.equal(unreadOnly.status, 200);
+  assert.ok((unreadOnly.data.notifications || []).length >= 1);
+  assert.ok((unreadOnly.data.notifications || []).every((n) => n.read === false));
+
+  const safetyOnly = await api('GET', '/notifications?type=safety', null, tokens.rider);
+  assert.equal(safetyOnly.status, 200);
+  assert.ok((safetyOnly.data.notifications || []).length >= 1, 'rider has a safety notification');
+  assert.ok((safetyOnly.data.notifications || []).every((n) => n.type === 'safety'));
+
+  const paged = await api('GET', '/notifications?limit=1', null, tokens.rider);
+  assert.equal(paged.status, 200);
+  assert.equal(paged.data.notifications.length, 1);
+  assert.ok((paged.data.total || 0) >= 1);
+  assert.equal(paged.data.limit, 1);
+
+  // delete one notification
+  const target = (await api('GET', '/notifications?limit=1', null, tokens.rider)).data.notifications[0];
+  const removed = await api('POST', `/notifications/${target.id}/remove`, {}, tokens.rider);
+  assert.equal(removed.status, 200);
+  const afterRemove = await api('GET', '/notifications', null, tokens.rider);
+  assert.ok(!afterRemove.data.notifications.some((n) => n.id === target.id), 'notification deleted');
+
+  // clear only read + clear everything
+  const clearRead = await api('POST', '/notifications/clear-all', { readOnly: true }, tokens.rider);
+  assert.equal(clearRead.status, 200);
+  const clearAll = await api('POST', '/notifications/clear-all', {}, tokens.rider);
+  assert.equal(clearAll.status, 200);
+  const empty = await api('GET', '/notifications', null, tokens.rider);
+  assert.equal(empty.data.total, 0, 'inbox fully cleared');
 });
 
 // ------------------------------------------------------------ emergency config

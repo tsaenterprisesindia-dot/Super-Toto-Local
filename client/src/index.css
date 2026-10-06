@@ -1546,6 +1546,16 @@ tr:hover td { background: #fafbfd; }
 .notif-item:last-child { border-bottom: none; }
 .notif-item.unread { background: #f0fbf6; }
 .notif-item:hover { background: var(--bg); }
+
+/* Admin notification center list */
+.notif-item-wrap { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.notif-item-wrap.unread { background: #f0fbf6; }
+.notif-item-wrap .notif-item { flex: 1; width: auto; border: none; }
+.notif-del {
+  border: none; background: transparent; color: var(--muted);
+  font-size: 14px; padding: 0 16px; cursor: pointer;
+}
+.notif-del:hover { color: var(--danger); background: #fff0f0; }
 .notif-icon { font-size: 18px; line-height: 1.3; }
 .notif-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .notif-title { font-size: 13.5px; font-weight: 700; line-height: 1.35; }
