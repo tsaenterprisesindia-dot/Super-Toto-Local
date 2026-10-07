@@ -19,6 +19,13 @@ const rideSchema = new mongoose.Schema(
     distanceKm: { type: Number, default: 0 },
     durationMin: { type: Number, default: 0 },
     vehicleType: { type: String, default: 'toto' },
+    // trip category: 'taxi' = passenger transport | 'ambulance' = patient transport
+    // (GoI National Ambulance Code / state transport dept compliant)
+    category: { type: String, enum: ['taxi', 'ambulance'], default: 'taxi' },
+    ambulanceType: { type: String, enum: ['', 'BLS', 'ALS'], default: '' }, // service level for category=ambulance
+    emergency: { type: Boolean, default: false }, // emergency call → surge disabled
+    patientConsent: { type: Boolean, default: false }, // DPDP-minimal transport consent
+    waitingAtPickup: { type: Boolean, default: false }, // patient waits at pickup / we wait at hospital
     stateCode: { type: String, default: '' },
     farePolicy: {
       stateCode: { type: String, default: '' },

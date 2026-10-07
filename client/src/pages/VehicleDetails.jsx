@@ -8,12 +8,16 @@ const VEHICLE_OPTIONS = [
   { id: 'auto', label: 'Auto Rickshaw', fuelDefault: 'Petrol' },
   { id: 'taxi', label: 'Taxi', fuelDefault: 'Petrol' },
   { id: 'bike', label: 'Bike Taxi', fuelDefault: 'Petrol' },
+  { id: 'ambulance-bls', label: 'Ambulance (BLS)', fuelDefault: 'Diesel' },
+  { id: 'ambulance-als', label: 'Ambulance (ALS)', fuelDefault: 'Diesel' },
 ];
 const BRANDS_BY_TYPE = {
   toto: ['Mahindra', 'Kinetic', 'Lohia', 'Hero', 'Euler', 'Terra', 'Atul', 'Other'],
   auto: ['Bajaj', 'Piaggio', 'TVS', 'Atul', 'Mahindra', 'Other'],
   taxi: ['Maruti', 'Hyundai', 'Tata', 'Mahindra', 'Toyota', 'Honda', 'Kia', 'Other'],
   bike: ['Hero MotoCorp', 'Bajaj', 'TVS', 'Honda', 'Suzuki', 'Yamaha', 'Royal Enfield', 'KTM', 'Other'],
+  'ambulance-bls': ['Force', 'Tata', 'Mahindra', 'Ashok Leyland', 'Maruti', 'Other'],
+  'ambulance-als': ['Force', 'Tata', 'Mahindra', 'Ashok Leyland', 'Other'],
 };
 const COLORS = ['White', 'Black', 'Red', 'Blue', 'Green', 'Yellow', 'Orange', 'Silver', 'Grey', 'Other'];
 const FUEL_TYPES_BY_TYPE = {
@@ -21,8 +25,12 @@ const FUEL_TYPES_BY_TYPE = {
   auto: ['Petrol', 'CNG', 'Electric', 'Diesel'],
   taxi: ['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'],
   bike: ['Petrol', 'Electric'],
+  'ambulance-bls': ['Diesel', 'Petrol'],
+  'ambulance-als': ['Diesel', 'Petrol'],
 };
 const CURRENT_YEAR = new Date().getFullYear();
+
+const isAmbulanceType = (id) => id === 'ambulance-bls' || id === 'ambulance-als';
 
 const VTYPE_LABEL = Object.fromEntries(VEHICLE_OPTIONS.map(v => [v.id, v.label]));
 const VTYPE_ID = Object.fromEntries(VEHICLE_OPTIONS.map(v => [v.label, v.id]));
@@ -58,6 +66,7 @@ export default function VehicleDetails() {
   const isBike = typeId === 'bike';
   const isToto = typeId === 'toto';
   const isAuto = typeId === 'auto';
+  const isAmbu = isAmbulanceType(typeId);
 
   const load = useCallback(async () => {
     try {
@@ -107,6 +116,12 @@ export default function VehicleDetails() {
           next.hasStep = true;
           next.hasCanopy = true;
           next.hasStorage = false;
+        } else if (isAmbulanceType(newId)) {
+          next.seats = 1;
+          next.luggageCapacityKg = 20;
+          next.hasStep = true;
+          next.hasCanopy = false;
+          next.hasStorage = true;
         } else {
           next.seats = 4;
           next.luggageCapacityKg = 15;
@@ -131,7 +146,7 @@ export default function VehicleDetails() {
 
   if (loading) return <div className="page-loader">Loading…</div>;
 
-  const seatMin = isBike ? 1 : 2;
+  const seatMin = isBike || isAmbu ? 1 : 2;
   const seatMax = isBike ? 2 : 8;
   const luggageMax = isBike ? 15 : 50;
   const brands = BRANDS_BY_TYPE[typeId] || BRANDS_BY_TYPE.toto;
@@ -142,7 +157,7 @@ export default function VehicleDetails() {
       <Nav />
       <div className="page">
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
-          <h2 style={{ marginTop: 0 }}>{isBike ? '🏍' : isToto ? '🛺' : isAuto ? '🛺' : '🚗'} Vehicle Details</h2>
+          <h2 style={{ marginTop: 0 }}>{isBike ? '🏍' : isToto ? '🛺' : isAuto ? '🛺' : isAmbu ? '🚑' : '🚗'} Vehicle Details</h2>
           <p className="small muted mb">
             Fill in your vehicle information. This helps riders know what to expect before they book.
           </p>
@@ -181,7 +196,7 @@ export default function VehicleDetails() {
               <label>Model Name *</label>
               <input
                 className="input"
-                placeholder={isBike ? 'e.g. Splendor+, Pulsar, Activa' : isToto ? 'e.g. Treo, Zor' : 'e.g. PIAGGIO Ape'}
+                placeholder={isBike ? 'e.g. Splendor+, Pulsar, Activa' : isToto ? 'e.g. Treo, Zor' : isAmbu ? 'e.g. Traveller Ambulance' : 'e.g. PIAGGIO Ape'}
                 value={form.model}
                 onChange={(e) => set('model', e.target.value)}
               />

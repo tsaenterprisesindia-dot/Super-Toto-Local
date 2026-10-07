@@ -76,6 +76,11 @@ export default function RiderHome() {
     localStorage.getItem('stl_book_mode') === 'reserved' ? 'reserved' : 'shared'
   );
 
+  const [emergency, setEmergency] = useState(false);
+  const [patientConsent, setPatientConsent] = useState(false);
+  const [waitingAtPickup, setWaitingAtPickup] = useState(false);
+  const [ambulanceCfg, setAmbulanceCfg] = useState(null);
+
   const currentUserId = JSON.parse(localStorage.getItem('btl_user') || '{}')?.id;
 
   const seatMode = ['shared', 'reserved', 'off'].includes(seatCfg.mode)
@@ -86,6 +91,34 @@ export default function RiderHome() {
   const seatsEnabled = seatMode !== 'off';
   const reservedSeats = bookMode === 'reserved';
   const maxSeats = estimate?.seatCount || DEFAULT_SEATS[vehicleType] || 4;
+
+  // Ambulance trips are whole-trip service calls: the level comes from the
+  // vehicle type, and only when the pickup resolves to an enabled state the
+  // ambulance cards are offered at all.
+  const isAmbulance = String(vehicleType || '').startsWith('ambulance-');
+  const ambulanceLevel = isAmbulance
+    ? (ambulanceCfg?.vehicleTypes || []).find((v) => v.id === vehicleType)?.ambulanceType || (vehicleType.endsWith('-als') ? 'ALS' : 'BLS')
+    : '';
+  const estState = estimate?.farePolicy?.stateCode || fstate;
+  const ambulanceAvailable =
+    !!ambulanceCfg?.enabled &&
+    (ambulanceCfg.enabledStates || []).includes(estState || '') &&
+    (ambulanceCfg.vehicleTypes || []).length > 0;
+  const ambulanceVehicleTypes = ambulanceCfg?.vehicleTypes || [];
+  const vehicleOptions = [
+    { id: 'toto', label: '🛺 Toto (E-Rickshaw)', tag: 'Economy' },
+    { id: 'auto', label: '🛺 Auto Rickshaw', tag: 'Standard' },
+    { id: 'taxi', label: '🚗 Taxi', tag: 'Comfort' },
+    { id: 'bike', label: '🏍️ Bike Taxi', tag: 'Budget' },
+    ...(ambulanceAvailable
+      ? ambulanceVehicleTypes.map((v) => ({
+          id: v.id,
+          label: v.ambulanceType === 'ALS' ? '🚑 Ambulance (ALS)' : '🚑 Ambulance (BLS)',
+          tag: v.ambulanceType === 'ALS' ? 'ALS' : 'BLS',
+          isAmbulance: true,
+        }))
+      : []),
+  ];
 
   useEffect(() => {
     client
@@ -105,6 +138,9 @@ export default function RiderHome() {
       .catch(() => {});
     client.get('/fare-policy')
       .then(({ data }) => setStateList(data.states || []))
+      .catch(() => {});
+    client.get('/ambulance/availability')
+      .then(({ data }) => setAmbulanceCfg(data))
       .catch(() => {});
   }, []);
 
@@ -176,8 +212,12 @@ export default function RiderHome() {
       return;
     }
     let alive = true;
+    const body = { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode };
+    if (isAmbulance) {
+      Object.assign(body, { category: 'ambulance', ambulanceType: ambulanceLevel, emergency, patientConsent, waitingAtPickup });
+    }
     client
-      .post('/rides/estimate', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode })
+      .post('/rides/estimate', body)
       .then(({ data }) => {
         if (!alive) return;
         setEstimate(data);
@@ -188,7 +228,7 @@ export default function RiderHome() {
     return () => {
       alive = false;
     };
-  }, [pickup, drop, luggageCount, seats, vehicleType, fstate, promo, bookMode]);
+  }, [pickup, drop, luggageCount, seats, vehicleType, fstate, promo, bookMode, isAmbulance, ambulanceLevel, emergency, patientConsent, waitingAtPickup]);
 
   // Re-clamp the seat count when the vehicle type / capacity changes
   useEffect(() => {
@@ -218,10 +258,16 @@ export default function RiderHome() {
 
   const requestRide = async () => {
     if (!pickup || !drop) return;
+    if (isAmbulance && estimate?.requirePatientConsent !== false && !patientConsent) {
+      setErr(t('riderhome.ambulanceConsentRequired') || 'Please confirm patient transport consent to book an ambulance');
+      return;
+    }
     setBusy(true);
     setErr('');
     try {
-      const { data } = await client.post('/rides', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode });
+      const body = { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode };
+      if (isAmbulance) Object.assign(body, { category: 'ambulance', ambulanceType: ambulanceLevel, emergency, patientConsent, waitingAtPickup });
+      const { data } = await client.post('/rides', body);
       setRide(data.ride);
       refreshShared();
     } catch (e) {
@@ -401,11 +447,11 @@ export default function RiderHome() {
                   <div className="field">
                     <label>{t('riderhome.chooseVehicle')}</label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                      {VEHICLE_OPTIONS.map((v) => (
+                      {vehicleOptions.map((v) => (
                         <button
                           key={v.id}
                           type="button"
-                          onClick={() => setVehicleType(v.id)}
+                          onClick={() => { setVehicleType(v.id); if (v.isAmbulance) setEmergency(false); }}
                           style={{
                             padding: '8px 10px',
                             borderRadius: 8,
@@ -419,10 +465,13 @@ export default function RiderHome() {
                         >
                           {v.label}
                           <div className="small muted" style={{ fontWeight: 400 }}>
-                            {t(`vehicle.tag${v.tag}`)} ·{' '}
-                            {seatsEnabled
-                              ? t('riderhome.seatsLabel', { count: v.id === 'bike' ? 1 : DEFAULT_SEATS[v.id] })
-                              : t('common.noSeats')}
+                            {v.isAmbulance
+                              ? `${v.tag === 'ALS' ? t('riderhome.ambulanceAls') : t('riderhome.ambulanceBls')} · ${t('riderhome.ambulanceWholeTrip')}`
+                              : `${t(`vehicle.tag${v.tag}`)} · ${
+                                  seatsEnabled
+                                    ? t('riderhome.seatsLabel', { count: v.id === 'bike' ? 1 : DEFAULT_SEATS[v.id] })
+                                    : t('common.noSeats')
+                                }`}
                           </div>
                         </button>
                       ))}
@@ -544,7 +593,8 @@ export default function RiderHome() {
                     )}
                   </div>
 
-                  <div className="field">
+                  {!isAmbulance && (
+                    <div className="field">
                     {reservedSeats ? (
                       <label>{t('riderhome.seatsAvailable', { count: maxSeats })}</label>
                     ) : seatsEnabled ? (
@@ -591,31 +641,75 @@ export default function RiderHome() {
                             : t('riderhome.seatNoteOff')}
                     </div>
                   </div>
+                  )}
 
-                  <div className="field">
-                    <label>
-                      {t('riderhome.luggageLabel', {
-                        detail: estimate?.fare?.luggage > 0 ? t('riderhome.luggageCharge') : t('riderhome.luggageFree'),
-                      })}
-                    </label>
-                    <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-                      <button type="button" className="btn btn-ghost small" onClick={() => setLuggageCount((c) => Math.max(0, c - 1))} disabled={luggageCount === 0}>−</button>
-                      <span style={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{luggageCount}</span>
-                      <button type="button" className="btn btn-ghost small" onClick={() => setLuggageCount((c) => c + 1)}>+</button>
-                      <span className="small muted" style={{ marginLeft: 4 }}>
-                        {luggageCount === 0
-                          ? t('riderhome.noLuggage')
-                          : luggageCount === 1
-                            ? t('riderhome.oneBag')
-                            : t('riderhome.bags', { count: luggageCount })}
-                      </span>
+                  {!isAmbulance && (
+                    <div className="field">
+                      <label>
+                        {t('riderhome.luggageLabel', {
+                          detail: estimate?.fare?.luggage > 0 ? t('riderhome.luggageCharge') : t('riderhome.luggageFree'),
+                        })}
+                      </label>
+                      <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                        <button type="button" className="btn btn-ghost small" onClick={() => setLuggageCount((c) => Math.max(0, c - 1))} disabled={luggageCount === 0}>−</button>
+                        <span style={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{luggageCount}</span>
+                        <button type="button" className="btn btn-ghost small" onClick={() => setLuggageCount((c) => c + 1)}>+</button>
+                        <span className="small muted" style={{ marginLeft: 4 }}>
+                          {luggageCount === 0
+                            ? t('riderhome.noLuggage')
+                            : luggageCount === 1
+                              ? t('riderhome.oneBag')
+                              : t('riderhome.bags', { count: luggageCount })}
+                        </span>
+                      </div>
+                      <div className="small muted" style={{ marginTop: 4 }}>
+                        {estimate?.luggage?.charge > 0
+                          ? t('riderhome.luggageExtra', { fare: formatINR(estimate.luggage.charge) })
+                          : t('riderhome.luggageFirstFree')}
+                      </div>
                     </div>
-                    <div className="small muted" style={{ marginTop: 4 }}>
-                      {estimate?.luggage?.charge > 0
-                        ? t('riderhome.luggageExtra', { fare: formatINR(estimate.luggage.charge) })
-                        : t('riderhome.luggageFirstFree')}
+                  )}
+
+                  {isAmbulance && (
+                    <div className="field" style={{ border: '1px solid var(--brand)', borderRadius: 10, padding: 12, background: 'var(--brand-light, #eef2ff)' }}>
+                      <div className="spread" style={{ marginBottom: 8 }}>
+                        <b>🚑 {t('riderhome.ambulanceTitle')} · {ambulanceLevel === 'ALS' ? t('riderhome.ambulanceAls') : t('riderhome.ambulanceBls')}</b>
+                        <span className="badge badge-red">{t('riderhome.ambulanceBadge')}</span>
+                      </div>
+                      <label className="row" style={{ gap: 8, cursor: 'pointer', alignItems: 'center', marginBottom: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={emergency}
+                          onChange={(e) => {
+                            const on = e.target.checked;
+                            setEmergency(on);
+                            if (!on) setWaitingAtPickup(false);
+                          }}
+                        />
+                        <span style={{ fontSize: 13, fontWeight: 700 }}>{t('riderhome.ambulanceEmergency')}</span>
+                      </label>
+                      {emergency && (
+                        <>
+                          <div className="alert alert-warn" style={{ margin: '4px 0 8px', padding: '8px 10px' }}>
+                            🚨 {t('riderhome.ambulanceEmergencyNote')}
+                          </div>
+                          <label className="row" style={{ gap: 8, cursor: 'pointer', alignItems: 'center', marginBottom: 8 }}>
+                            <input type="checkbox" checked={waitingAtPickup} onChange={(e) => setWaitingAtPickup(e.target.checked)} />
+                            <span className="small">{t('riderhome.ambulanceWaiting')}</span>
+                          </label>
+                        </>
+                      )}
+                      {estimate?.requirePatientConsent !== false && (
+                        <label className="row" style={{ gap: 8, cursor: 'pointer', alignItems: 'center' }}>
+                          <input type="checkbox" checked={patientConsent} onChange={(e) => setPatientConsent(e.target.checked)} />
+                          <span className="small">{t('riderhome.ambulanceConsent')}</span>
+                        </label>
+                      )}
+                      <div className="small muted" style={{ marginTop: 8 }}>
+                        🧳 {t('riderhome.ambulanceTripNote')}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {estimate ? (
                     <div className="card mt" data-tt="rider-fare" style={{ background: 'var(--bg)', boxShadow: 'none' }}>
@@ -624,6 +718,13 @@ export default function RiderHome() {
                           ⚠️ {estimate.distanceError}
                         </div>
                       ) : null}
+                      {estimate.category === 'ambulance' && (
+                        <div className={`alert ${estimate.emergency ? 'alert-warn' : 'alert-info'} mb`} style={{ marginTop: 0, padding: '8px 10px' }}>
+                          {estimate.emergency
+                            ? `🚨 ${t('riderhome.ambulanceEmergeFare')}`
+                            : `🚑 ${t('riderhome.ambulanceScheduledFare')}`}
+                        </div>
+                      )}
                       <div className="spread">
                         <span className="muted">{t('riderhome.distance')}</span>
                         <b>{t('riderhome.distanceLine', { km: estimate.distanceKm, min: estimate.durationMin })}</b>
@@ -767,22 +868,30 @@ export default function RiderHome() {
                   )}
 
                   <div className="row mt" data-tt="rider-actions" style={{ gap: 8 }}>
+                    {!isAmbulance && (
+                      <button
+                        className="btn btn-ghost btn-lg"
+                        style={{ flex: 1 }}
+                        disabled={!drop || busy || estimate?.distanceError}
+                        onClick={reserveRide}
+                      >
+                        {reservedSeats ? t('riderhome.reserveWhole') : t('riderhome.reserveBtn')}
+                      </button>
+                    )}
                     <button
-                      className="btn btn-ghost btn-lg"
-                      style={{ flex: 1 }}
-                      disabled={!drop || busy || estimate?.distanceError}
-                      onClick={reserveRide}
-                    >
-                      {reservedSeats ? t('riderhome.reserveWhole') : t('riderhome.reserveBtn')}
-                    </button>
-                    <button
-                      className="btn btn-primary btn-lg"
+                      className={`btn btn-lg${isAmbulance ? ' btn-danger' : ' btn-primary'} ${isAmbulance ? 'btn-block' : ''}`}
                       data-tt="rider-book"
                       style={{ flex: 1 }}
-                      disabled={!drop || busy || estimate?.distanceError}
+                      disabled={!drop || busy || estimate?.distanceError || (isAmbulance && estimate?.requirePatientConsent !== false && !patientConsent)}
                       onClick={requestRide}
                     >
-                      {busy ? t('riderhome.requesting') : reservedSeats ? t('riderhome.reserveRequest') : t('riderhome.requestNow')}
+                      {busy
+                        ? t('riderhome.requesting')
+                        : isAmbulance
+                          ? t('riderhome.ambulanceRequest')
+                          : reservedSeats
+                            ? t('riderhome.reserveRequest')
+                            : t('riderhome.requestNow')}
                     </button>
                   </div>
                 </div>
@@ -846,7 +955,9 @@ export default function RiderHome() {
                 <div className="card">
                   <h3 style={{ margin: 0 }}>{t('riderhome.howItWorks')}</h3>
                   <ul className="small muted" style={{ paddingLeft: 18, marginBottom: 0 }}>
-                    {reservedSeats ? (
+                    {isAmbulance ? (
+                      <li>{t('riderhome.howAmbulance')}</li>
+                    ) : reservedSeats ? (
                       <li>{t('riderhome.howReserveWhole')}</li>
                     ) : seatsEnabled ? <li>{t('riderhome.howBookSeats')}</li> : null}
                     <li>{t('riderhome.howNearestDriver')}</li>

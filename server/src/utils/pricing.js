@@ -3,7 +3,18 @@ export const VEHICLE_TYPES = [
   { id: 'auto', label: 'Auto Rickshaw', defaultRates: { base: 40, perKm: 18, perMin: 2, minimum: 50, avgSpeedKmh: 25, minutesPerKm: 2.4, seatCount: 3 } },
   { id: 'taxi', label: 'Taxi', defaultRates: { base: 60, perKm: 22, perMin: 2.5, minimum: 70, avgSpeedKmh: 35, minutesPerKm: 1.7, seatCount: 4 } },
   { id: 'bike', label: 'Bike Taxi', defaultRates: { base: 20, perKm: 10, perMin: 1, minimum: 25, avgSpeedKmh: 40, minutesPerKm: 1.5, seatCount: 1 } },
+  // Life-support ambulances. Fares are whole-trip service charges (one patient +
+  // attendant), priced per MoHFW National Ambulance Code Type B (BLS) / Type C (ALS)
+  // guidance and state transport dept notified rates. Emergency calls never surge.
+  { id: 'ambulance-bls', label: 'Ambulance (BLS)', category: 'ambulance', ambulanceType: 'BLS', defaultRates: { base: 250, perKm: 25, perMin: 3, minimum: 300, avgSpeedKmh: 35, minutesPerKm: 1.7, seatCount: 1 } },
+  { id: 'ambulance-als', label: 'Ambulance (ALS)', category: 'ambulance', ambulanceType: 'ALS', defaultRates: { base: 500, perKm: 35, perMin: 5, minimum: 600, avgSpeedKmh: 40, minutesPerKm: 1.5, seatCount: 1 } },
 ];
+
+export const AMBULANCE_VEHICLE_TYPES = VEHICLE_TYPES.filter((v) => v.category === 'ambulance').map((v) => v.id);
+
+export function isAmbulanceVehicle(vtId) {
+  return AMBULANCE_VEHICLE_TYPES.includes(String(vtId || '').trim().toLowerCase());
+}
 
 export function getVehicleRates(stored = {}) {
   const rates = {};

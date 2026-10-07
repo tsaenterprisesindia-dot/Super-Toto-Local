@@ -37,6 +37,8 @@ import AdminSafetyTips from './pages/admin/AdminSafetyTips.jsx';
 import AdminBikeTaxi from './pages/admin/AdminBikeTaxi.jsx';
 import AdminFeedback from './pages/admin/AdminFeedback.jsx';
 import AdminCompliance from './pages/admin/AdminCompliance.jsx';
+import AdminAmbulances from './pages/admin/AdminAmbulances.jsx';
+import DriverAmbulance from './pages/DriverAmbulance.jsx';
 import AdminEmergency from './pages/admin/AdminEmergency.jsx';
 import AdminNotifications from './pages/admin/AdminNotifications.jsx';
 import AdminStateFares from './pages/admin/AdminStateFares.jsx';
@@ -161,6 +163,14 @@ export default function App() {
         }
       />
       <Route
+        path="/driver/ambulance"
+        element={
+          <Protected roles={['driver']}>
+            <DriverAmbulance />
+          </Protected>
+        }
+      />
+      <Route
         path="/admin"
         element={
           <Protected roles={['admin']}>
@@ -185,6 +195,7 @@ export default function App() {
         <Route path="emergency" element={<AdminEmergency />} />
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="state-fares" element={<AdminStateFares />} />
+        <Route path="ambulances" element={<AdminAmbulances />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
       <Route

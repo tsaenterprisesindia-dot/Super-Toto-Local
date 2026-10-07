@@ -208,6 +208,7 @@ export default function DriverHome() {
 
   const notApproved = user?.driverStatus !== 'approved';
   const inRide = ride && ACTIVE_STATUSES.includes(ride.status);
+  const isAmbulanceDriver = String(user?.vehicleType || '').toLowerCase().includes('ambulance');
 
   return (
     <>
@@ -386,6 +387,12 @@ export default function DriverHome() {
               🚗 Vehicle Details
             </Link>
 
+            {isAmbulanceDriver && (
+              <Link to="/driver/ambulance" data-tt="driver-ambulance" className="btn btn-primary btn-block mb" style={{ textAlign: 'center' }}>
+                🚑 Ambulance Compliance
+              </Link>
+            )}
+
             {ride ? (
               <>
                 <div className="alert alert-info mb">
@@ -433,9 +440,22 @@ export default function DriverHome() {
         {request && (
           <div className="fade-in">
             <div className="spread">
-              <h3>🚕 New ride request</h3>
+              <h3>{request.category === 'ambulance' ? `🚑 New ambulance request` : '🚕 New ride request'}</h3>
               <span className={`badge ${timeLeft <= 8 ? 'badge-red' : 'badge-amber'}`}>{timeLeft}s</span>
             </div>
+            {request.category === 'ambulance' && (
+              <div className="row" style={{ gap: 6, margin: '4px 0 10px' }}>
+                <span className={`badge ${request.ambulanceType === 'ALS' ? 'badge-red' : 'badge-blue'}`}>
+                  {request.ambulanceType || 'BLS'}
+                </span>
+                {request.emergency ? (
+                  <span className="badge badge-red">🚨 Emergency</span>
+                ) : (
+                  <span className="badge badge-green">Scheduled transport</span>
+                )}
+                {request.waitingAtPickup && <span className="badge badge-amber">⏳ Waiting at pickup</span>}
+              </div>
+            )}
             <div className="card" style={{ background: 'var(--bg)', boxShadow: 'none', margin: '12px 0' }}>
               <div className="spread">
                 <span className="muted small">Pickup</span>

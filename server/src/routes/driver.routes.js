@@ -456,7 +456,7 @@ export default function driverRoutes(io) {
 
   // --- Vehicle details -------------------------------------------------------
   const VEHICLE_FIELDS = ['brand', 'model', 'year', 'color', 'seats', 'luggageCapacityKg', 'hasStep', 'hasCanopy', 'hasStorage', 'fuelType', 'insuranceUpto', 'permitUpto', 'engineCc', 'hasPillionSeat', 'helmetCount', 'hasTopBox'];
-  const VEHICLE_TYPE_MAP = { 'toto (e-rickshaw)': 'toto', 'auto rickshaw': 'auto', 'taxi': 'taxi', 'bike taxi': 'bike', 'cab': 'taxi', 'other': 'other' };
+  const VEHICLE_TYPE_MAP = { 'toto (e-rickshaw)': 'toto', 'auto rickshaw': 'auto', 'taxi': 'taxi', 'bike taxi': 'bike', 'cab': 'taxi', 'ambulance (bls)': 'ambulance-bls', 'ambulance (als)': 'ambulance-als', 'other': 'other' };
 
   router.get('/vehicle', async (req, res, next) => {
     try {

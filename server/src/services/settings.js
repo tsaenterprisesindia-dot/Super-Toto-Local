@@ -776,6 +776,56 @@ export async function saveComplianceConfig(input = {}) {
   return { ...clean, grievanceOfficer: { ...clean.grievanceOfficer }, cashSettlement: { ...clean.cashSettlement } };
 }
 
+// ─── Ambulance Aggregator Configuration ───────────────────────────────────────
+// Phase-1 availability is on a per-state opt-in so operators launch states
+// gradually. Rate tables are normal vehicle rates (see VEHICLE_TYPES) with
+// per-state overrides under State Fares.
+
+export const AMBULANCE_CONFIG_DEFAULTS = {
+  enabled: true, // master switch for the ambulance category
+  enabledStates: ['SK', 'BR'], // states where ambulance service is listed
+  emergencyTollFree: true, // emergency calls are exempt from surge pricing
+  requirePatientConsent: true, // DPDP-minimal transport consent before dispatch
+  maxRideDistanceKm: 150, // hard cap on ambulance trip length
+  note:
+    'Ambulance ops follow the MoHFW National Ambulance Code and state transport dept permits. Vehicles dispatch only with a valid, admin-verified compliance record for the trip state.',
+};
+
+export async function getAmbulanceConfig() {
+  const doc = await Settings.findOne();
+  const stored = doc?.ambulanceConfig || {};
+  const cfg = { ...AMBULANCE_CONFIG_DEFAULTS, ...stored };
+  if (stored.enabledStates === undefined) cfg.enabledStates = AMBULANCE_CONFIG_DEFAULTS.enabledStates;
+  if (!Array.isArray(cfg.enabledStates)) cfg.enabledStates = [];
+  return cfg;
+}
+
+export async function saveAmbulanceConfig(input = {}) {
+  const doc = (await Settings.findOne()) || new Settings();
+  const cfg = { ...AMBULANCE_CONFIG_DEFAULTS };
+  if (input.enabled !== undefined) cfg.enabled = input.enabled === true || input.enabled === 'true';
+  if (input.emergencyTollFree !== undefined) cfg.emergencyTollFree = input.emergencyTollFree === true || input.emergencyTollFree === 'true';
+  if (input.requirePatientConsent !== undefined) cfg.requirePatientConsent = input.requirePatientConsent === true || input.requirePatientConsent === 'true';
+  if (Array.isArray(input.enabledStates)) {
+    cfg.enabledStates = input.enabledStates
+      .filter((s) => typeof s === 'string' && s.trim())
+      .map((s) => s.trim().toUpperCase());
+  }
+  const maxKm = Number(input.maxRideDistanceKm);
+  if (Number.isFinite(maxKm) && maxKm >= 5) cfg.maxRideDistanceKm = Math.min(maxKm, 500);
+  if (typeof input.note === 'string' && input.note.trim()) cfg.note = input.note.trim();
+  doc.ambulanceConfig = cfg;
+  await doc.save();
+  return cfg;
+}
+
+export async function isAmbulanceEnabledForState(stateCode) {
+  if (!stateCode) return false;
+  const cfg = await getAmbulanceConfig();
+  if (!cfg.enabled) return false;
+  return cfg.enabledStates.map((s) => String(s).trim().toUpperCase()).includes(String(stateCode).trim().toUpperCase());
+}
+
 // ─── Driver Training Configuration ────────────────────────────────────────────
 
 export const TRAINING_DEFAULTS = {

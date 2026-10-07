@@ -60,6 +60,10 @@ const settingsSchema = new mongoose.Schema(
       type: Object,
       default: {},
     },
+    ambulanceConfig: {
+      type: Object,
+      default: {},
+    },
   },
   { timestamps: true }
 );

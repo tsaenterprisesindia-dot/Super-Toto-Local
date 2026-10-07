@@ -19,6 +19,7 @@ const notificationSchema = new mongoose.Schema(
         'safety',
         'feedback',
         'promo',
+        'compliance',
         'system',
       ],
       default: 'system',

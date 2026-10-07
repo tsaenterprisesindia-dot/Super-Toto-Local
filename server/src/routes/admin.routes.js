@@ -8,9 +8,11 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
 import { Promo } from '../models/Promo.js';
-import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, getEmergencyConfig, saveEmergencyConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
+import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, getEmergencyConfig, saveEmergencyConfig, getAmbulanceConfig, saveAmbulanceConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 import { notifyUser } from '../services/notify.js';
+import AmbulanceCompliance from '../models/AmbulanceCompliance.js';
+import { ambulanceComplianceDTO, runAmbulanceExpirySweep } from '../services/ambulance.js';
 
 export default function adminRoutes(io) {
   const router = Router();
@@ -840,6 +842,119 @@ export default function adminRoutes(io) {
     try {
       const policy = await saveStateFarePolicy(req.params.stateCode, req.body || {}, req.user?.email || 'admin');
       res.json({ policy, message: 'Fare policy saved' });
+    } catch (err) { next(err); }
+  });
+
+  // --- Ambulance aggregator (GoI National Ambulance Code / state permits) ---
+  router.get('/ambulance-config', async (_req, res, next) => {
+    try {
+      res.json({ ambulanceConfig: await getAmbulanceConfig(), states: INDIA_STATES });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/ambulance-config', async (req, res, next) => {
+    try {
+      const ambulanceConfig = await saveAmbulanceConfig(req.body || {});
+      res.json({ ambulanceConfig, message: 'Ambulance config updated' });
+    } catch (err) { next(err); }
+  });
+
+  // Full compliance register for the admin dashboard.
+  router.get('/ambulances', async (_req, res, next) => {
+    try {
+      const records = await AmbulanceCompliance.find()
+        .populate('driver', 'name phone email driverStatus isOnline location')
+        .sort({ createdAt: -1 })
+        .lean();
+      const config = await getAmbulanceConfig();
+      res.json({
+        records: records.map(ambulanceComplianceDTO),
+        ambulanceConfig: config,
+        states: INDIA_STATES,
+      });
+    } catch (err) { next(err); }
+  });
+
+  // Summary counts for the ambulance dashboard tiles.
+  router.get('/ambulances/summary', async (_req, res, next) => {
+    try {
+      const [total, pending, active, suspended, expiring30, byState, byType] = await Promise.all([
+        AmbulanceCompliance.countDocuments(),
+        AmbulanceCompliance.countDocuments({ status: 'pending' }),
+        AmbulanceCompliance.countDocuments({ status: 'active' }),
+        AmbulanceCompliance.countDocuments({ status: 'suspended' }),
+        AmbulanceCompliance.countDocuments({
+          status: 'active',
+          $or: [
+            { 'permit.validUpto': { $lt: new Date(Date.now() + 30 * 86400000) } },
+            { 'fitness.validUpto': { $lt: new Date(Date.now() + 30 * 86400000) } },
+            { 'insurance.validUpto': { $lt: new Date(Date.now() + 30 * 86400000) } },
+            { 'emtCert.validUpto': { $lt: new Date(Date.now() + 30 * 86400000) } },
+            { 'drivingLicense.validUpto': { $lt: new Date(Date.now() + 30 * 86400000) } },
+          ],
+        }),
+        AmbulanceCompliance.aggregate([{ $group: { _id: '$stateCode', count: { $sum: 1 } } }]),
+        AmbulanceCompliance.aggregate([{ $group: { _id: '$ambulanceType', count: { $sum: 1 } } }]),
+      ]);
+      res.json({
+        summary: {
+          total,
+          pending,
+          active,
+          suspended,
+          expiring30,
+          byState: Object.fromEntries(byState.map((x) => [x._id, x.count])),
+          byType: Object.fromEntries(byType.map((x) => [x._id, x.count])),
+        },
+      });
+    } catch (err) { next(err); }
+  });
+
+  // Admin review action: approve / suspend / renew a compliance record.
+  router.patch('/ambulances/:id', async (req, res, next) => {
+    try {
+      const rec = await AmbulanceCompliance.findById(req.params.id);
+      if (!rec) return res.status(404).json({ message: 'Compliance record not found' });
+      const status = String(req.body.status || '').toLowerCase();
+      if (!['pending', 'active', 'suspended'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
+      }
+      rec.status = status;
+      if (req.body.rejectionReason !== undefined) rec.rejectionReason = typeof req.body.rejectionReason === 'string' ? req.body.rejectionReason.trim() : '';
+      if (req.body.notes !== undefined) rec.notes = typeof req.body.notes === 'string' ? req.body.notes.trim() : '';
+      if (status === 'active') {
+        rec.reviewedAt = new Date();
+        rec.reviewedBy = req.user.id;
+        rec.rejectionReason = '';
+      }
+      await rec.save();
+      if (status === 'active') {
+        await notifyUser({
+          io,
+          userId: rec.driver,
+          type: 'compliance',
+          title: 'Ambulance compliance approved',
+          message: `Your ${rec.ambulanceType} ambulance for ${rec.stateCode} is approved and eligible for dispatch.`,
+        });
+      } else if (status === 'suspended') {
+        await notifyUser({
+          io,
+          userId: rec.driver,
+          type: 'compliance',
+          title: 'Ambulance compliance suspended',
+          message: `Your ${rec.ambulanceType} ambulance for ${rec.stateCode} was suspended${rec.rejectionReason ? `: ${rec.rejectionReason}` : '.'}`,
+        });
+      }
+      const out = await AmbulanceCompliance.findById(rec._id).populate('driver', 'name phone email').lean();
+      res.json({ record: ambulanceComplianceDTO(out), message: 'Compliance record updated' });
+    } catch (err) { next(err); }
+  });
+
+  // Manual trigger of the daily expiry sweep (also runs on boot + interval).
+  router.post('/ambulances/expire-sweep', async (_req, res, next) => {
+    try {
+      const result = await runAmbulanceExpirySweep({ io });
+      res.json({ ...result, message: `Checked ${result.checked} active record(s); suspended ${result.suspended} for expired documents.` });
     } catch (err) { next(err); }
   });
 

@@ -22,6 +22,7 @@ const CREDS = {
   rider: { email: 'rider@supertoto.local', password: 'Rider@Gangtok1' },
   driver: { email: 'driver@supertoto.local', password: 'Driver@Toto9' },
   admin: { email: 'admin@supertoto.local', password: 'Admin@Toto2k26' },
+  ambo: { email: 'ambo@supertoto.local', password: 'Driver@Toto9' },
 };
 
 let child = null;
@@ -515,4 +516,150 @@ test('emergency helplines: public config, admin read/update, persistence', async
     ],
   }, tokens.admin);
   assert.equal(restore.status, 200);
+});
+
+// ------------------------------------------------------------ ambulance (phase 1)
+test('ambulance availability: public, state-aware, lists BLS/ALS units', async () => {
+  const sk = await api('GET', '/ambulance/availability?state=SK', null, null);
+  assert.equal(sk.status, 200);
+  assert.equal(sk.data.availableInState, true);
+  const ids = sk.data.vehicleTypes.map((v) => v.id);
+  assert.ok(ids.includes('ambulance-bls'));
+  assert.ok(ids.includes('ambulance-als'));
+
+  const dl = await api('GET', '/ambulance/availability?state=DL', null, null);
+  assert.equal(dl.data.availableInState, false);
+});
+
+test('ambulance compliance: driver submits → pending; admin approves → active', async () => {
+  tokens.ambo = await login('ambo');
+
+  // the seeded driver already has an active SK BLS record
+  const mine = await api('GET', '/ambulance/compliance', null, tokens.ambo);
+  assert.equal(mine.status, 200);
+  assert.ok(mine.data.records.some((r) => r.stateCode === 'SK' && r.status === 'active'));
+
+  // submit a NEW record (Bihar ALS) → pending review
+  const created = await api('POST', '/ambulance/compliance', {
+    stateCode: 'BR',
+    ambulanceType: 'ALS',
+    vehicleNumber: 'BR-01-HA8456',
+    permit: { number: 'BTR-PMT-2026-88', issuer: 'Bihar Transport Dept', validUpto: '2027-12-31' },
+    fitness: { number: 'FIT-BR-2210', issuer: 'Bihar Motor Vehicles', validUpto: '2027-06-30' },
+    insurance: { number: 'POL-55120', issuer: 'New India Assurance', validUpto: '2027-03-31' },
+    drivingLicense: { number: 'BR03-2014-33440', issuer: 'RTO Patna', validUpto: '2034-01-01' },
+    emtCert: { number: 'EMT-A-3021', issuer: 'National Ambulance Code', validUpto: '2027-09-30' },
+    equipmentList: 'Stretcher, oxygen, defibrillator, ventilator, first-aid',
+  }, tokens.ambo);
+  assert.equal(created.status, 201);
+  const recId = created.data.record.id;
+  assert.equal(created.data.record.status, 'pending');
+
+  // non-admin cannot review
+  const denied = await api('PATCH', `/admin/ambulances/${recId}`, { status: 'active' }, tokens.driver);
+  assert.equal(denied.status, 403);
+
+  // admin sees it in the register and approves it
+  const list = await api('GET', '/admin/ambulances', null, tokens.admin);
+  assert.equal(list.status, 200);
+  const found = list.data.records.find((r) => r.id === recId);
+  assert.ok(found, 'new compliance appears in the admin register');
+  assert.equal(found.status, 'pending');
+
+  const approved = await api('PATCH', `/admin/ambulances/${recId}`, { status: 'active' }, tokens.admin);
+  assert.equal(approved.status, 200);
+  assert.equal(approved.data.record.status, 'active');
+  assert.ok(approved.data.record.reviewedAt);
+
+  // duplicate registration for the same state+type is rejected
+  const dup = await api('POST', '/ambulance/compliance', {
+    stateCode: 'BR', ambulanceType: 'ALS', vehicleNumber: 'BR-01-HA9999',
+  }, tokens.ambo);
+  assert.equal(dup.status, 409);
+});
+
+test('ambulance estimate: whole-trip billing, no seat booking, emergency never surges', async () => {
+  const e = await api('POST', '/rides/estimate', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-bls', state: 'SK', emergency: true,
+  }, tokens.rider);
+  assert.equal(e.status, 200);
+  assert.equal(e.data.category, 'ambulance');
+  assert.equal(e.data.ambulanceType, 'BLS');
+  assert.equal(e.data.seatsEnabled, false);
+  assert.equal(e.data.seatMode, 'off');
+  assert.equal(e.data.surge, 1, 'emergency calls always bill at base fare');
+  assert.equal(e.data.riderTotal, e.data.fare.total);
+  assert.equal(e.data.requirePatientConsent, true);
+
+  const als = await api('POST', '/rides/estimate', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-als', state: 'SK', emergency: false,
+  }, tokens.rider);
+  assert.equal(als.status, 200);
+  assert.equal(als.data.ambulanceType, 'ALS');
+  assert.ok(als.data.fare.total > e.data.fare.total, 'ALS bills higher than BLS');
+  assert.equal(als.data.surge, 1);
+});
+
+test('ambulance booking: consent required, succeeds with consent, cancel', async () => {
+  // no consent → rejected
+  const noConsent = await api('POST', '/rides', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-bls', state: 'SK', emergency: true, patientConsent: false,
+  }, tokens.rider);
+  assert.equal(noConsent.status, 400);
+
+  const ok = await api('POST', '/rides', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-bls', state: 'SK', emergency: true, patientConsent: true, waitingAtPickup: true,
+  }, tokens.rider);
+  assert.equal(ok.status, 201);
+  const ride = ok.data.ride;
+  assert.equal(ride.category, 'ambulance');
+  assert.equal(ride.ambulanceType, 'BLS');
+  assert.equal(ride.emergency, true);
+  assert.equal(ride.patientConsent, true);
+  assert.equal(ride.waitingAtPickup, true);
+  assert.equal(ride.stateCode, 'SK');
+  assert.ok(ride.fare > 0);
+  assert.equal(ride.shared.enabled, false, 'ambulance is never seat-booked');
+
+  const c = await api('POST', `/rides/${ride._id}/cancel`, {}, tokens.rider);
+  assert.equal(c.status, 200);
+});
+
+test('ambulance expiry sweep auto-suspends expired compliant records and notifies', async () => {
+  // a record that is administratively active but whose documents are in the past
+  const expired = await api('POST', '/ambulance/compliance', {
+    stateCode: 'SK',
+    ambulanceType: 'ALS',
+    vehicleNumber: 'SK-01-E9911',
+    permit: { number: 'STA-OLD-1', validUpto: '2024-01-01' },
+    fitness: { number: 'FIT-OLD-1', validUpto: '2024-01-01' },
+    insurance: { number: 'POL-OLD-1', validUpto: '2024-01-01' },
+    drivingLicense: { number: 'SK-OLD-1', validUpto: '2024-01-01' },
+    emtCert: { number: 'EMT-OLD-1', validUpto: '2024-01-01' },
+  }, tokens.ambo);
+  assert.equal(expired.status, 201);
+  const recId = expired.data.record.id;
+
+  await api('PATCH', `/admin/ambulances/${recId}`, { status: 'active' }, tokens.admin);
+
+  const reg = await api('GET', '/admin/ambulances', null, tokens.admin);
+  const rec = reg.data.records.find((r) => r.id === recId);
+  assert.equal(rec.status, 'active');
+
+  const sweep = await api('POST', '/admin/ambulances/expire-sweep', {}, tokens.admin);
+  assert.equal(sweep.status, 200, JSON.stringify(sweep.data) || 'no body');
+  assert.ok(sweep.data.suspended >= 1);
+
+  const after = await api('GET', '/admin/ambulances', null, tokens.admin);
+  const recAfter = after.data.records.find((r) => r.id === recId);
+  assert.equal(recAfter.status, 'suspended', 'expired record is auto-suspended');
+
+  // the compliant seeded SK BLS record survives the sweep
+  assert.ok(after.data.records.some((r) => r.stateCode === 'SK' && r.ambulanceType === 'BLS' && r.status === 'active'));
+
+  // summary tile counts reflect the maths
+  const summary = await api('GET', '/admin/ambulances/summary', null, tokens.admin);
+  assert.equal(summary.status, 200);
+  assert.ok(summary.data.summary.total >= 3);
+  assert.ok(summary.data.summary.suspended >= 1);
 });

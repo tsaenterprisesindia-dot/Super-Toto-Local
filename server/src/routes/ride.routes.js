@@ -9,8 +9,10 @@ import {
   computeSharedFare,
   computeSurge,
   computeLuggageCharge,
+  isAmbulanceVehicle,
+  VEHICLE_TYPES,
 } from '../utils/pricing.js';
-import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
+import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, getAmbulanceConfig, isAmbulanceEnabledForState, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
 import { telephonyEnabled, sendEmergencyAlerts, publicUrl } from '../services/telephony.js';
 import { settleCashDue } from '../services/cashSettlement.js';
 import { notifyUser, notifyAdmins } from '../services/notify.js';
@@ -51,7 +53,9 @@ async function surgeContext() {
 // - Reserved seats: the whole vehicle is reserved by ONE rider, who pays the full
 //   trip fare. No other riders can join.
 // - Off: whole-trip (1 passenger) billing, no seat booking.
-async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode, mode }) {
+// Ambulance trips are always whole-trip (patient + attendant), never shared, and
+// emergency calls never attract surge.
+async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode, mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup }) {
   const luggageCount = Number(luggage?.count) || 0;
   const luggageHeavyCount = Number(luggage?.heavyCount) || 0;
   // Road distance from OSRM (falls back to haversine when unreachable); the
@@ -76,7 +80,17 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
     }
   }
   if (vtRates[vtId]) Object.assign(cfg, vtRates[vtId]);
-  const seatCfg = await getSeatBookingConfig();
+
+  const isAmbulance = isAmbulanceVehicle(vtId) || String(category || '').trim().toLowerCase() === 'ambulance';
+  // Service level comes from the explicit param or the vehicle type itself, so
+  // an 'ambulance-als' request is always ALS without the client re-stating it.
+  const ambulanceLevel = isAmbulance
+    ? (String((ambulanceType || (VEHICLE_TYPES.find((v) => v.id === vtId)?.ambulanceType)) || '').toUpperCase() === 'ALS' ? 'ALS' : 'BLS')
+    : '';
+  const isEmergency = !!emergency;
+  // Ambulance trips are whole-vehicle service calls — no seat booking, ever.
+  let seatCfg = await getSeatBookingConfig();
+  if (isAmbulance) seatCfg = { mode: 'off', message: '' };
   const cfgSeatMode = SEAT_MODES.includes(seatCfg.mode) ? seatCfg.mode : 'shared';
   // The rider may pick 'reserved' (whole vehicle) vs 'shared' (per-seat) at
   // booking time. The admin config stays the default; when the operator has
@@ -103,11 +117,15 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   const compliance = await getComplianceConfig();
   const surgeCap = farePolicy?.surgeCap ?? compliance.surgeCap;
   if (surgeCap > 0) surge = Math.min(surge, surgeCap);
+  // Emergency ambulance calls always bill at base fare — no surge, ever.
+  if (isAmbulance && isEmergency) surge = 1;
   if (farePolicy?.cancellationFee != null) cfg.cancellationFee = farePolicy.cancellationFee;
   else if (compliance.cancellationFee != null) cfg.cancellationFee = compliance.cancellationFee;
   // Automatic GST split: compare operator's registered state with the trip state.
   cfg.gstState = compliance.operatingState || '';
   cfg.tripState = effectiveState || stateForCoords(drop) || '';
+  const ambulanceCfg = isAmbulance ? await getAmbulanceConfig() : null;
+  if (isAmbulance && ambulanceCfg?.maxRideDistanceKm) cfg.maxRideDistanceKm = ambulanceCfg.maxRideDistanceKm;
   const luggageCharge = computeLuggageCharge(luggageCount, luggageHeavyCount, cfg);
   const { tripFare, perSeatFare } = computeSharedFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, seatCount);
   const riderFare = reserved ? tripFare.total : perSeatFare * bookedSeats;
@@ -132,6 +150,13 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
     requestedSeats: requested,
     activeRequests,
     onlineDrivers,
+    isAmbulance,
+    category: isAmbulance ? 'ambulance' : 'taxi',
+    ambulanceType: ambulanceLevel,
+    emergency: isEmergency,
+    patientConsent: !!patientConsent,
+    waitingAtPickup: !!waitingAtPickup,
+    requirePatientConsent: isAmbulance ? (ambulanceCfg?.requirePatientConsent ?? true) : false,
     farePolicy: farePolicy
       ? {
           stateCode: farePolicy.stateCode,
@@ -159,11 +184,11 @@ export default function rideRoutes(io) {
 
   router.post('/estimate', async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state, promo } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo, category, ambulanceType, emergency, patientConsent, waitingAtPickup } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup });
 
       let promoInfo = null;
       if (promo) {
@@ -213,6 +238,12 @@ export default function rideRoutes(io) {
         cancellationFee: c.cfg.cancellationFee,
         cancellationPolicy: (await getComplianceConfig()).cancellationPolicy,
         farePolicy: c.farePolicy,
+        category: c.category,
+        ambulanceType: c.ambulanceType || '',
+        emergency: c.emergency,
+        patientConsent: c.patientConsent,
+        waitingAtPickup: c.waitingAtPickup,
+        requirePatientConsent: c.requirePatientConsent,
       });
     } catch (err) {
       next(err);
@@ -222,7 +253,7 @@ export default function rideRoutes(io) {
   // Rider requests a toto (books seats on a shared trip)
   router.post('/', requireRole('rider'), async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state, promo } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo, category, ambulanceType, emergency, patientConsent, waitingAtPickup } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
@@ -231,7 +262,7 @@ export default function rideRoutes(io) {
         return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
       }
 
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup });
       if (!c.seatsEnabled && c.requestedSeats > 1) {
         return res.status(400).json({ message: 'Seat booking is currently disabled by the operator. Rides are booked for the whole trip (1 passenger).' });
       }
@@ -240,6 +271,17 @@ export default function rideRoutes(io) {
       }
       if (c.distanceKm > c.cfg.maxRideDistanceKm) {
         return res.status(400).json({ message: `Maximum ride distance is ${c.cfg.maxRideDistanceKm} km` });
+      }
+      if (c.isAmbulance) {
+        if (c.requirePatientConsent && !c.patientConsent) {
+          return res.status(400).json({ message: 'Patient transport consent is required to book an ambulance' });
+        }
+        if (!c.farePolicy?.stateCode) {
+          return res.status(400).json({ message: 'Ambulance service requires the pickup location to resolve to a state' });
+        }
+        if (!(await isAmbulanceEnabledForState(c.farePolicy.stateCode))) {
+          return res.status(400).json({ message: `Ambulance service is not available in ${c.farePolicy.stateName || c.farePolicy.stateCode} yet` });
+        }
       }
 
       let redeemed = null;
@@ -257,6 +299,11 @@ export default function rideRoutes(io) {
         distanceKm: +c.distanceKm.toFixed(2),
         durationMin: c.durationMin,
         vehicleType: c.vtId,
+        category: c.category,
+        ambulanceType: c.ambulanceType || '',
+        emergency: c.emergency,
+        patientConsent: c.patientConsent,
+        waitingAtPickup: c.waitingAtPickup,
         stateCode: c.farePolicy?.stateCode || state || '',
         farePolicy: {
           stateCode: c.farePolicy?.stateCode || '',
@@ -336,6 +383,11 @@ export default function rideRoutes(io) {
         distanceKm: +c.distanceKm.toFixed(2),
         durationMin: c.durationMin,
         vehicleType: c.vtId,
+        category: c.category,
+        ambulanceType: c.ambulanceType || '',
+        emergency: c.emergency,
+        patientConsent: c.patientConsent,
+        waitingAtPickup: c.waitingAtPickup,
         stateCode: c.farePolicy?.stateCode || state || '',
         farePolicy: {
           stateCode: c.farePolicy?.stateCode || '',

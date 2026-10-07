@@ -11,6 +11,7 @@ import { setupSocket } from './socket.js';
 import { notFound, errorHandler } from './middleware/error.js';
 import { seedIfEmpty } from './seed.js';
 import { seedStateFareDefaults } from './services/settings.js';
+import { runAmbulanceExpirySweep } from './services/ambulance.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +69,24 @@ async function start() {
   server.listen(PORT, () => {
     console.log(`[server] Super Toto Local API running at http://localhost:${PORT}`);
   });
+  // Ambulance compliance expiry sweep: run once at boot, then daily. Keeps
+  // expired registrations out of dispatch without admin intervention.
+  try {
+    const boot = await runAmbulanceExpirySweep({ io });
+    console.log(`[ambulance] boot expiry sweep — checked ${boot.checked}, suspended ${boot.suspended}`);
+  } catch (err) {
+    console.error('[ambulance] boot expiry sweep failed:', err.message);
+  }
+  const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const dailyTimer = setInterval(async () => {
+    try {
+      const result = await runAmbulanceExpirySweep({ io });
+      console.log(`[ambulance] daily expiry sweep — checked ${result.checked}, suspended ${result.suspended}`);
+    } catch (err) {
+      console.error('[ambulance] daily expiry sweep failed:', err.message);
+    }
+  }, SWEEP_INTERVAL_MS);
+  dailyTimer.unref();
 }
 
 start().catch((err) => {

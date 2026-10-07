@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import User from './models/User.js';
 import Ride from './models/Ride.js';
 import { Promo } from './models/Promo.js';
+import AmbulanceCompliance from './models/AmbulanceCompliance.js';
 import { connectDB, stopDB } from './config/db.js';
 import { computeFare, haversineKm, estimate } from './utils/pricing.js';
 
@@ -161,6 +162,77 @@ async function seedDatabase() {
     location: { lat: 27.3314, lng: 88.6193 },
   });
 
+  // Demo ambulance (BLS) driver with admin-verified compliance records for the
+  // two enabled states (Sikkim + Bihar), so dispatch works whether the demo keys
+  // its VNR against Gangtok or the Katihar pickup locations.
+  const ambulanceDriver = await User.create({
+    name: 'Dorjee Bhutia',
+    email: 'ambo@supertoto.local',
+    phone: '9000000006',
+    password: driverPw,
+    role: 'driver',
+    vehicleType: 'Ambulance (BLS)',
+    vehicleNumber: 'SK-01-E2450',
+    vehicleDetails: { seats: 1, brand: 'Force', model: 'Traveller Ambulance', color: 'White (Red Cross)', insuranceUpto: '2027-12-31', permitUpto: '2027-12-31' },
+    driverStatus: 'approved',
+    isOnline: true,
+    location: { lat: 27.3389, lng: 88.6065 },
+    rating: 4.8,
+    ratingsCount: 6,
+    earnings: 0,
+    totalRides: 0,
+    termsAcceptedAt: new Date(),
+    termsVersion: '1.0',
+    privacyConsentAt: new Date(),
+    privacyConsentVersion: '1.0',
+    aggregatorAgreementAcceptedAt: new Date(),
+    trainingAcknowledgedAt: new Date(),
+    documents: [
+      { type: 'aadhaar', filename: 'aadhaar_demo.jpg', originalName: 'aadhaar.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'rc', filename: 'rc_demo.jpg', originalName: 'rc.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'license', filename: 'license_demo.jpg', originalName: 'license.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'bank', filename: 'bank_demo.jpg', originalName: 'bank.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'photo', filename: 'photo_demo.jpg', originalName: 'photo.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'pcc', filename: 'pcc_demo.jpg', originalName: 'pcc.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'insurance', filename: 'ins_demo.jpg', originalName: 'insurance.jpg', status: 'approved', reviewedAt: new Date() },
+      { type: 'puc', filename: 'puc_demo.jpg', originalName: 'puc.jpg', status: 'approved', reviewedAt: new Date() },
+    ],
+  });
+
+  await AmbulanceCompliance.create({
+    driver: ambulanceDriver._id,
+    stateCode: 'SK',
+    ambulanceType: 'BLS',
+    vehicleNumber: 'SK-01-E2450',
+    permit: { number: 'STA-PMT-2026-114', issuer: 'State Transport Authority, Sikkim', validUpto: new Date('2027-12-31') },
+    fitness: { number: 'FIT-2026-0458', issuer: 'Sikkim Motor Vehicles Dept', validUpto: new Date('2026-12-31') },
+    insurance: { number: 'POL-99213', issuer: 'National Insurance Co', validUpto: new Date('2027-06-30') },
+    roadTax: { number: 'RT-SK-2450', issuer: 'Sikkim Transport Dept', validUpto: new Date('2027-03-31') },
+    puc: { number: 'PUC-88231', issuer: 'Sikkim PUC Centre', validUpto: new Date('2026-10-15') },
+    drivingLicense: { number: 'SK02-2014-87654', issuer: 'RTO Gangtok', validUpto: new Date('2033-01-01') },
+    emtCert: { number: 'EMT-B-5521', issuer: 'NSSM / National Ambulance Code', validUpto: new Date('2027-11-30') },
+    equipmentList: 'Stretcher/cot, oxygen cylinder, suction unit, splints, first-aid kit, AED',
+    status: 'active',
+    reviewedAt: new Date(),
+  });
+
+  await AmbulanceCompliance.create({
+    driver: ambulanceDriver._id,
+    stateCode: 'BR',
+    ambulanceType: 'BLS',
+    vehicleNumber: 'BR-01-E2450',
+    permit: { number: 'BR-PMT-2026-0912', issuer: 'State Transport Authority, Bihar', validUpto: new Date('2027-12-31') },
+    fitness: { number: 'FIT-2026-0771', issuer: 'Bihar Motor Vehicles Dept', validUpto: new Date('2026-12-31') },
+    insurance: { number: 'POL-99144', issuer: 'National Insurance Co', validUpto: new Date('2027-06-30') },
+    roadTax: { number: 'RT-BR-2450', issuer: 'Bihar Transport Dept', validUpto: new Date('2027-03-31') },
+    puc: { number: 'PUC-66012', issuer: 'Bihar PUC Centre', validUpto: new Date('2026-10-15') },
+    drivingLicense: { number: 'BR02-2014-33110', issuer: 'RTO Katihar', validUpto: new Date('2033-01-01') },
+    emtCert: { number: 'EMT-B-5521', issuer: 'NSSM / National Ambulance Code', validUpto: new Date('2027-11-30') },
+    equipmentList: 'Stretcher/cot, oxygen cylinder, suction unit, splints, first-aid kit, AED',
+    status: 'active',
+    reviewedAt: new Date(),
+  });
+
   const rideSamples = [
     { pickupIdx: 0, dropIdx: 4, daysAgo: 1, paid: true, rated: true, method: 'UPI' },
     { pickupIdx: 1, dropIdx: 5, daysAgo: 2, paid: true, rated: true, method: 'Card' },
@@ -191,7 +263,7 @@ async function seedDatabase() {
     perUserLimit: 5,
   });
 
-  return { admin, rider, driver1, driver2, driver3, rides };
+  return { admin, rider, driver1, driver2, driver3, ambulanceDriver, rides };
 }
 
 export async function seedIfEmpty(mongoServer) {

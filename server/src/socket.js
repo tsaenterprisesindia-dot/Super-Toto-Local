@@ -3,6 +3,7 @@ import User from './models/User.js';
 import Ride from './models/Ride.js';
 import { haversineKm, VEHICLE_TYPES } from './utils/pricing.js';
 import { getPricingConfig } from './services/settings.js';
+import { ambulanceEligibleDriverIds } from './services/ambulance.js';
 import { getJwtSecret } from './middleware/auth.js';
 
 const dispatchTimers = new Map();
@@ -94,7 +95,7 @@ export async function dispatchRideRequest(io, rideId) {
 
   const rideVehicleType = ride.vehicleType || 'toto';
   const vehicleLabels = VEHICLE_TYPES.filter((v) => v.id === rideVehicleType).map((v) => v.label);
-  const candidates = await User.find({
+  let candidates = await User.find({
     role: 'driver',
     driverStatus: 'approved',
     isOnline: true,
@@ -108,6 +109,16 @@ export async function dispatchRideRequest(io, rideId) {
       { vehicleType: '' },
     ],
   });
+
+  // Ambulance requests dispatch only to drivers with a current, admin-verified
+  // compliance record for the trip's state at the requested service level.
+  if (ride.category === 'ambulance') {
+    const eligible = await ambulanceEligibleDriverIds({
+      stateCode: ride.stateCode,
+      ambulanceType: ride.ambulanceType || 'BLS',
+    });
+    candidates = candidates.filter((d) => eligible.has(String(d._id)));
+  }
 
   const cfg = await getPricingConfig();
   const near = candidates
