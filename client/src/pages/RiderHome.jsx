@@ -451,7 +451,7 @@ export default function RiderHome() {
                         <button
                           key={v.id}
                           type="button"
-                          onClick={() => { setVehicleType(v.id); if (v.isAmbulance) setEmergency(false); }}
+                          onClick={() => { setVehicleType(v.id); if (!v.isAmbulance) { setEmergency(false); setWaitingAtPickup(false); setPatientConsent(false); } }}
                           style={{
                             padding: '8px 10px',
                             borderRadius: 8,
