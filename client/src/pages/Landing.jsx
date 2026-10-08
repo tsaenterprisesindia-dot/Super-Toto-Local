@@ -74,7 +74,8 @@ export default function Landing() {
         <div className="small muted">
           Legal: <Link to="/legal/privacy">Privacy Policy (DPDP)</Link> ·{' '}
           <Link to="/legal/disclosures">Disclosures</Link> ·{' '}
-          <Link to="/legal/disclosures">Grievance Officer</Link>
+          <Link to="/legal/disclosures">Grievance Officer</Link> ·{' '}
+          <Link to="/legal/ambulance-rider-terms">Ambulance Terms</Link>
         </div>
         <div className="small muted mt" style={{ marginTop: 4 }}>© {new Date().getFullYear()} TSA Enterprises · Operated under the Motor Vehicle Aggregator Guidelines, Ministry of Road Transport &amp; Highways, GoI</div>
       </div>

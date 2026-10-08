@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import client from '../api/client.js';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const DOC_FIELDS = [
   { key: 'permit', label: 'State Transport Permit' },
@@ -27,6 +28,7 @@ const emptyForm = () => ({
 });
 
 export default function DriverAmbulance() {
+  const { user } = useAuth();
   const [states, setStates] = useState([]);
   const [records, setRecords] = useState([]);
   const [availableType, setAvailableType] = useState(true);
@@ -137,6 +139,42 @@ export default function DriverAmbulance() {
         )}
         {msg && <div className="alert alert-success" style={{ marginTop: 8 }}>{msg}</div>}
         {err && <div className="err-box" style={{ marginTop: 8 }}>{err}</div>}
+      </div>
+
+      <div className="card">
+        <h3 style={{ margin: 0 }}>📄 Legal consents</h3>
+        <div className="small muted" style={{ marginTop: 4 }}>
+          In the aggregator model you must accept the Ambulance Terms &amp; Conditions and sign the Ambulance Aggregator Agreement
+          before registering any ambulance. Registrations are blocked until both are accepted.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+          <div className="spread" style={{ gap: 10 }}>
+            <div>
+              <b>Ambulance Terms &amp; Conditions</b>
+              <div className="small muted">
+                {user?.ambulanceTermsAcceptedAt
+                  ? `Accepted on ${new Date(user.ambulanceTermsAcceptedAt).toLocaleDateString('en-IN')} · v${user.ambulanceTermsVersion || '—'}`
+                  : 'Not accepted yet'}
+              </div>
+            </div>
+            <Link to="/terms/ambulance" className="btn btn-ghost small">
+              {user?.ambulanceTermsAcceptedAt ? 'View terms' : 'Accept terms'}
+            </Link>
+          </div>
+          <div className="spread" style={{ gap: 10 }}>
+            <div>
+              <b>Ambulance Aggregator Agreement</b>
+              <div className="small muted">
+                {user?.ambulanceAgreementAcceptedAt
+                  ? `Signed on ${new Date(user.ambulanceAgreementAcceptedAt).toLocaleDateString('en-IN')} · v${user.ambulanceAgreementVersion || '—'}`
+                  : 'Not signed yet'}
+              </div>
+            </div>
+            <Link to="/legal/ambulance-agreement" className="btn btn-ghost small">
+              {user?.ambulanceAgreementAcceptedAt ? 'View agreement' : 'Sign agreement'}
+            </Link>
+          </div>
+        </div>
       </div>
 
       {records.length > 0 && (

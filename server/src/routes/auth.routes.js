@@ -350,6 +350,36 @@ export default function authRoutes() {
     }
   });
 
+  // Ambulance Terms & Conditions acceptance - ambulance drivers only.
+  router.post('/accept-ambulance-terms', requireAuth, requireRole('driver'), async (req, res) => {
+    try {
+      const { version } = req.body || {};
+      if (!version) return res.status(400).json({ message: 'Terms version is required' });
+      const user = req.userDoc;
+      user.ambulanceTermsAcceptedAt = new Date();
+      user.ambulanceTermsVersion = String(version);
+      await user.save();
+      res.json({ message: 'Ambulance terms accepted', user: user.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Ambulance Aggregator Agreement acceptance - ambulance drivers only.
+  router.post('/accept-ambulance-agreement', requireAuth, requireRole('driver'), async (req, res) => {
+    try {
+      const { version } = req.body || {};
+      if (!version) return res.status(400).json({ message: 'Agreement version is required' });
+      const user = req.userDoc;
+      user.ambulanceAgreementAcceptedAt = new Date();
+      user.ambulanceAgreementVersion = String(version);
+      await user.save();
+      res.json({ message: 'Ambulance aggregator agreement accepted', user: user.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/me', requireAuth, (req, res) => {
     res.json({ user: req.userDoc.toSafeJSON() });
   });

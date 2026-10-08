@@ -38,6 +38,24 @@ export default function ambulanceRoutes() {
   const driverRouter = Router();
   driverRouter.use(requireAuth, requireRole('driver'));
 
+  // An ambulance driver must have accepted the Ambulance Terms & Conditions and
+  // signed the Ambulance Aggregator Agreement before registering any vehicle.
+  const requireAmbulanceConsents = (req, res, next) => {
+    const u = req.userDoc;
+    const missing = [];
+    if (!u.ambulanceTermsAcceptedAt) missing.push('terms');
+    if (!u.ambulanceAgreementAcceptedAt) missing.push('agreement');
+    if (missing.length) {
+      return res.status(403).json({
+        message: 'Accept the Ambulance Terms & Conditions and sign the Ambulance Aggregator Agreement before registering an ambulance.',
+        missing,
+        termsUrl: '/terms/ambulance',
+        agreementUrl: '/legal/ambulance-agreement',
+      });
+    }
+    next();
+  };
+
   driverRouter.get('/compliance', async (req, res, next) => {
     try {
       const records = await AmbulanceCompliance.find({ driver: req.user.id })
@@ -50,7 +68,7 @@ export default function ambulanceRoutes() {
     }
   });
 
-  driverRouter.post('/compliance', async (req, res, next) => {
+  driverRouter.post('/compliance', requireAmbulanceConsents, async (req, res, next) => {
     try {
       const stateCode = String(req.body.stateCode || '').trim().toUpperCase();
       const ambulanceType = String(req.body.ambulanceType || '').trim().toUpperCase();
@@ -84,7 +102,7 @@ export default function ambulanceRoutes() {
     }
   });
 
-  driverRouter.put('/compliance/:id', async (req, res, next) => {
+  driverRouter.put('/compliance/:id', requireAmbulanceConsents, async (req, res, next) => {
     try {
       const rec = await AmbulanceCompliance.findOne({ _id: req.params.id, driver: req.user.id });
       if (!rec) return res.status(404).json({ message: 'Compliance record not found' });

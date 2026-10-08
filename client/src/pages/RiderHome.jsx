@@ -708,6 +708,9 @@ export default function RiderHome() {
                       <div className="small muted" style={{ marginTop: 8 }}>
                         🧳 {t('riderhome.ambulanceTripNote')}
                       </div>
+                      <Link to="/legal/ambulance-rider-terms" className="small" style={{ display: 'inline-block', marginTop: 8 }}>
+                        📄 Ambulance service terms
+                      </Link>
                     </div>
                   )}
 

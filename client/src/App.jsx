@@ -21,6 +21,9 @@ import Feedback from './pages/Feedback.jsx';
 import Privacy from './pages/legal/Privacy.jsx';
 import Disclosures from './pages/legal/Disclosures.jsx';
 import DriverAgreement from './pages/legal/DriverAgreement.jsx';
+import AmbulanceDriverTerms from './pages/legal/AmbulanceDriverTerms.jsx';
+import AmbulanceAgreement from './pages/legal/AmbulanceAgreement.jsx';
+import AmbulanceRiderTerms from './pages/legal/AmbulanceRiderTerms.jsx';
 import AdminLayout from './layouts/AdminLayout.jsx';
 import AdminOverview from './pages/admin/AdminOverview.jsx';
 import AdminDrivers from './pages/admin/AdminDrivers.jsx';
@@ -78,6 +81,26 @@ export default function App() {
         element={
           <Protected roles={['rider', 'driver']}>
             <DriverAgreement />
+          </Protected>
+        }
+      />
+
+      <Route
+        path="/legal/ambulance-agreement"
+        element={
+          <Protected roles={['driver']}>
+            <AmbulanceAgreement />
+          </Protected>
+        }
+      />
+
+      <Route path="/legal/ambulance-rider-terms" element={<AmbulanceRiderTerms />} />
+
+      <Route
+        path="/terms/ambulance"
+        element={
+          <Protected roles={['driver']}>
+            <AmbulanceDriverTerms />
           </Protected>
         }
       />

@@ -186,6 +186,10 @@ async function seedDatabase() {
     privacyConsentAt: new Date(),
     privacyConsentVersion: '1.0',
     aggregatorAgreementAcceptedAt: new Date(),
+    ambulanceTermsAcceptedAt: new Date(),
+    ambulanceTermsVersion: '1.0',
+    ambulanceAgreementAcceptedAt: new Date(),
+    ambulanceAgreementVersion: '1.0',
     trainingAcknowledgedAt: new Date(),
     documents: [
       { type: 'aadhaar', filename: 'aadhaar_demo.jpg', originalName: 'aadhaar.jpg', status: 'approved', reviewedAt: new Date() },

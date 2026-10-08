@@ -104,6 +104,12 @@ const userSchema = new mongoose.Schema(
     aggregatorAgreementAcceptedAt: { type: Date, default: null },
     aggregatorAgreementVersion: { type: String, default: '' },
 
+    // Ambulance terms & conditions + Ambulance Aggregator Agreement for drivers
+    ambulanceTermsAcceptedAt: { type: Date, default: null },
+    ambulanceTermsVersion: { type: String, default: '' },
+    ambulanceAgreementAcceptedAt: { type: Date, default: null },
+    ambulanceAgreementVersion: { type: String, default: '' },
+
     // Driver training acknowledgement
     trainingAcknowledgedAt: { type: Date, default: null },
 
