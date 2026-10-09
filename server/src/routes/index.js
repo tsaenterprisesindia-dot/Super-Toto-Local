@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import authRoutes from './auth.routes.js';
 import faceRoutes from './face.routes.js';
 import rideRoutes from './ride.routes.js';
@@ -7,6 +7,8 @@ import riderRoutes from './rider.routes.js';
 import adminRoutes from './admin.routes.js';
 import chatbotRoutes from './chatbot.routes.js';
 import feedbackRoutes from './feedback.routes.js';
+import fleetRoutes from './fleet.routes.js';
+
 import notificationRoutes from './notification.routes.js';
 import ambulanceRoutes from './ambulance.routes.js';
 import Ride from '../models/Ride.js';
@@ -18,7 +20,7 @@ export default function routes(io) {
   router.use('/auth', authRoutes());
   router.use('/face', faceRoutes());
 
-  // PUBLIC — live "track my ride" link shared by the rider (no auth; unguessable token)
+  // PUBLIC â€” live "track my ride" link shared by the rider (no auth; unguessable token)
   router.get('/track/:token', async (req, res, next) => {
     try {
       const ride = await Ride.findOne({ shareToken: req.params.token })
@@ -69,17 +71,21 @@ export default function routes(io) {
   router.use('/rider', riderRoutes(io));
   router.use('/chatbot', chatbotRoutes());
   router.use('/feedback', feedbackRoutes());
+  router.use('/fleet', fleetRoutes());
+  router.use('/fleet', fleetRoutes());
+  router.use('/fleet', fleetRoutes());
+  
   router.use('/notifications', notificationRoutes());
   router.use('/ambulance', ambulanceRoutes());
   router.use('/admin', adminRoutes(io));
   router.get('/health', (_req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
-  // Public feedback config — riders/drivers need this to show/hide review panel
+  // Public feedback config â€” riders/drivers need this to show/hide review panel
   router.get('/feedback-config', async (_req, res) => {
     try {
       res.json({ feedbackConfig: await getFeedbackConfig() });
     } catch (err) { res.json({ feedbackConfig: { enabled: true, discountAmount: 10 } }); }
   });
-  // Public ads config — clients use this to show/hide ads
+  // Public ads config â€” clients use this to show/hide ads
   router.get('/ads-config', async (_req, res) => {
     try {
       res.json({ adsConfig: await getAdsConfig() });
@@ -109,12 +115,12 @@ export default function routes(io) {
   router.get('/contact-config', async (_req, res) => {
     try {
       res.json({ contactConfig: await getContactConfig() });
-    } catch (err) { res.json({ contactConfig: { helplinePhone: '+919811997286', helplineLabel: '24×7 Helpline', showHelpline: true } }); }
+    } catch (err) { res.json({ contactConfig: { helplinePhone: '+919811997286', helplineLabel: '24Ã—7 Helpline', showHelpline: true } }); }
   });
   router.get('/chatbot-config', async (_req, res) => {
     try {
       res.json({ chatbotConfig: await getChatbotConfig() });
-    } catch (err) { res.json({ chatbotConfig: { enabled: true, botName: 'Toto Assist', greeting: 'Hi! 👋' } }); }
+    } catch (err) { res.json({ chatbotConfig: { enabled: true, botName: 'Toto Assist', greeting: 'Hi! ðŸ‘‹' } }); }
   });
   router.get('/seat-booking-config', async (_req, res) => {
     try {
@@ -132,7 +138,7 @@ export default function routes(io) {
           available: false,
           states: INDIA_STATES.map((s) => ({ code: s.code, name: s.name })),
           defaultState: stateName(''),
-          message: 'No active fare policy for this state — national default fares apply.',
+          message: 'No active fare policy for this state â€” national default fares apply.',
         });
       }
       res.json({
@@ -186,4 +192,13 @@ export default function routes(io) {
   });
   return router;
 }
+
+
+
+
+
+
+
+
+
 

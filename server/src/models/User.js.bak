@@ -1,4 +1,4 @@
-﻿import mongoose from 'mongoose';
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
   {
@@ -14,13 +14,9 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ['rider', 'driver', 'admin', 'fleet_owner'],
+      enum: ['rider', 'driver', 'admin'],
       default: 'rider',
     },
-
-    // Fleet owner context
-    fleetOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    assignedVehicleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle', default: null },
 
     // Face recognition login (rider/driver only)
     faceDescriptor: { type: [Number], default: [] },
@@ -172,4 +168,3 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
 
 const User = mongoose.model('User', userSchema);
 export default User;
-
