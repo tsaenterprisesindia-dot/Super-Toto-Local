@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+﻿import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import ChatBot from './components/ChatBot.jsx';
 import Landing from './pages/Landing.jsx';
@@ -24,6 +24,9 @@ import DriverAgreement from './pages/legal/DriverAgreement.jsx';
 import AmbulanceDriverTerms from './pages/legal/AmbulanceDriverTerms.jsx';
 import AmbulanceAgreement from './pages/legal/AmbulanceAgreement.jsx';
 import AmbulanceRiderTerms from './pages/legal/AmbulanceRiderTerms.jsx';
+import FleetDashboard from './pages/fleet/FleetDashboard.jsx';
+import FleetVehicles from './pages/fleet/FleetVehicles.jsx';
+import FleetDrivers from './pages/fleet/FleetDrivers.jsx';
 import AdminLayout from './layouts/AdminLayout.jsx';
 import AdminOverview from './pages/admin/AdminOverview.jsx';
 import AdminDrivers from './pages/admin/AdminDrivers.jsx';
@@ -48,7 +51,7 @@ import AdminStateFares from './pages/admin/AdminStateFares.jsx';
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="page-loader">Loading…</div>;
+  if (loading) return <div className="page-loader">Loadingâ€¦</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : '/'} replace />;
@@ -230,7 +233,9 @@ export default function App() {
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+          <Route path="/fleet" element={<Protected roles={['fleet_owner']}><FleetDashboard/></Protected>}/>
+      <Route path="/fleet/vehicles" element={<Protected roles={['fleet_owner']}><FleetVehicles/></Protected>}/>
+      <Route path="/fleet/drivers" element={<Protected roles={['fleet_owner']}><FleetDrivers/></Protected>}/>    </Routes>
     <GlobalChat />
     </>
   );
@@ -241,3 +246,5 @@ function GlobalChat() {
   if (loading || !user) return null;
   return <ChatBot />;
 }
+
+
