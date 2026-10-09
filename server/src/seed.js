@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs';
+﻿import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import User from './models/User.js';
 import Ride from './models/Ride.js';
@@ -162,6 +162,17 @@ async function seedDatabase() {
     location: { lat: 27.3314, lng: 88.6193 },
   });
 
+  const fleetOwner = await User.create({
+    name: 'Fleet Owner Demo',
+    email: 'fleet@supertoto.local',
+    phone: '9000000010',
+    password: adminPw,
+    role: 'fleet_owner',
+    termsAcceptedAt: new Date(),
+    termsVersion: '1.0',
+    privacyConsentAt: new Date(),
+    privacyConsentVersion: '1.0',
+  });
   // Demo ambulance (BLS) driver with admin-verified compliance records for the
   // two enabled states (Sikkim + Bihar), so dispatch works whether the demo keys
   // its VNR against Gangtok or the Katihar pickup locations.
@@ -203,6 +214,17 @@ async function seedDatabase() {
     ],
   });
 
+  const fleetOwner = await User.create({
+    name: 'Fleet Owner Demo',
+    email: 'fleet@supertoto.local',
+    phone: '9000000010',
+    password: adminPw,
+    role: 'fleet_owner',
+    termsAcceptedAt: new Date(),
+    termsVersion: '1.0',
+    privacyConsentAt: new Date(),
+    privacyConsentVersion: '1.0',
+  });
   await AmbulanceCompliance.create({
     driver: ambulanceDriver._id,
     stateCode: 'SK',
@@ -220,6 +242,17 @@ async function seedDatabase() {
     reviewedAt: new Date(),
   });
 
+  const fleetOwner = await User.create({
+    name: 'Fleet Owner Demo',
+    email: 'fleet@supertoto.local',
+    phone: '9000000010',
+    password: adminPw,
+    role: 'fleet_owner',
+    termsAcceptedAt: new Date(),
+    termsVersion: '1.0',
+    privacyConsentAt: new Date(),
+    privacyConsentVersion: '1.0',
+  });
   await AmbulanceCompliance.create({
     driver: ambulanceDriver._id,
     stateCode: 'BR',
@@ -252,14 +285,14 @@ async function seedDatabase() {
   const revenue = rides.reduce((sum, r) => sum + r.fareBreakup.driverEarnings, 0);
   await User.findByIdAndUpdate(driver1._id, { earnings: revenue, totalRides: rides.length });
 
-  // Demo promo code so the promo engine is usable out of the box (10% off, up to ₹30)
+  // Demo promo code so the promo engine is usable out of the box (10% off, up to â‚¹30)
   await Promo.create({
     code: 'WELCOME10',
     type: 'pct',
     value: 10,
     maxDiscount: 30,
     minFare: 0,
-    description: '10% off your next trip (up to ₹30)',
+    description: '10% off your next trip (up to â‚¹30)',
     active: true,
     validFrom: new Date(Date.now() - 86400000),
     validUntil: new Date(Date.now() + 365 * 86400000),
@@ -297,3 +330,6 @@ if (process.argv[1]?.endsWith('seed.js')) {
   }
   await stopDB();
 }
+
+
+
