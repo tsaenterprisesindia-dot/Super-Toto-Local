@@ -44,6 +44,7 @@ import AdminBikeTaxi from './pages/admin/AdminBikeTaxi.jsx';
 import AdminFeedback from './pages/admin/AdminFeedback.jsx';
 import AdminCompliance from './pages/admin/AdminCompliance.jsx';
 import AdminAmbulances from './pages/admin/AdminAmbulances.jsx';
+import AdminFleet from './pages/admin/AdminFleet.jsx';
 import DriverAmbulance from './pages/DriverAmbulance.jsx';
 import AdminEmergency from './pages/admin/AdminEmergency.jsx';
 import AdminNotifications from './pages/admin/AdminNotifications.jsx';
@@ -235,7 +236,9 @@ export default function App() {
       <Route path="*" element={<Navigate to="/" replace />} />
           <Route path="/fleet" element={<Protected roles={['fleet_owner']}><FleetDashboard/></Protected>}/>
       <Route path="/fleet/vehicles" element={<Protected roles={['fleet_owner']}><FleetVehicles/></Protected>}/>
-      <Route path="/fleet/drivers" element={<Protected roles={['fleet_owner']}><FleetDrivers/></Protected>}/>    </Routes>
+      <Route path="/fleet/drivers" element={<Protected roles={['fleet_owner']}><FleetDrivers/></Protected>}/>    
+      <Route path='/admin/fleet' element={<Protected roles={['admin']}><AdminFleet/></Protected>}/>
+    </Routes>
     <GlobalChat />
     </>
   );
@@ -246,5 +249,6 @@ function GlobalChat() {
   if (loading || !user) return null;
   return <ChatBot />;
 }
+
 
 

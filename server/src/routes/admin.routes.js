@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import path from 'path';
 import fs from 'fs';
 import User from '../models/User.js';
@@ -221,9 +221,9 @@ export default function adminRoutes(io) {
   });
 
   // Suspend (ban) a user for a specific period or permanently.
-  //   until: ISO date string  → temporary suspension (auto-expires)
-  //   until: null / omitted   → permanent suspension until admin reinstates
-  //   settlementConfirmed: true → required when the user has outstanding financials
+  //   until: ISO date string  â†’ temporary suspension (auto-expires)
+  //   until: null / omitted   â†’ permanent suspension until admin reinstates
+  //   settlementConfirmed: true â†’ required when the user has outstanding financials
   router.post('/suspend/:id', async (req, res, next) => {
     try {
       const { reason, until, settlementConfirmed } = req.body || {};
@@ -248,7 +248,7 @@ export default function adminRoutes(io) {
 
       if (outstandingAmount > 0 && !settlementConfirmed) {
         return res.status(409).json({
-          message: `This user has ₹${outstandingAmount.toLocaleString('en-IN')} in outstanding financials. Confirm settlement before suspending.`,
+          message: `This user has â‚¹${outstandingAmount.toLocaleString('en-IN')} in outstanding financials. Confirm settlement before suspending.`,
           outstandingAmount,
           requiresSettlement: true,
         });
@@ -725,7 +725,7 @@ export default function adminRoutes(io) {
           accountStatus,
           u.ambulanceTermsAcceptedAt ? new Date(u.ambulanceTermsAcceptedAt).toLocaleDateString('en-IN') : 'No',
           u.ambulanceAgreementAcceptedAt ? new Date(u.ambulanceAgreementAcceptedAt).toLocaleDateString('en-IN') : 'No',
-          docStatus.aadhaar || '—', docStatus.rc || '—', docStatus.license || '—', docStatus.bank || '—', docStatus.photo || '—', docStatus.pcc || '—',
+          docStatus.aadhaar || 'â€”', docStatus.rc || 'â€”', docStatus.license || 'â€”', docStatus.bank || 'â€”', docStatus.photo || 'â€”', docStatus.pcc || 'â€”',
           u.totalRides || 0, u.earnings || 0, u.rating || 5,
           u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-IN') : '',
         ];
@@ -848,6 +848,52 @@ export default function adminRoutes(io) {
     } catch (err) { next(err); }
   });
 
+  // Fleet management for admin
+  router.get('/fleet-owners', async (_req, res, next) => {
+    try {
+      const owners = await User.find({ role: 'fleet_owner' })
+        .select('-password -resetCode -resetExpires -faceDescriptor')
+        .sort({ createdAt: -1 })
+        .lean();
+      res.json({ owners });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/fleet-owners/:id/vehicles', async (req, res, next) => {
+    try {
+      const vehicles = await Vehicle.find({ fleetOwnerId: req.params.id }).sort({ createdAt: -1 }).lean();
+      res.json({ vehicles });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/fleet-owners/:id/drivers', async (req, res, next) => {
+    try {
+      const drivers = await User.find({ fleetOwnerId: req.params.id, role: 'driver' })
+        .select('-password -resetCode -resetExpires -faceDescriptor')
+        .sort({ createdAt: -1 })
+        .lean();
+      res.json({ drivers });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/fleet-overview', async (_req, res, next) => {
+    try {
+      const [owners, vehicles, drivers] = await Promise.all([
+        User.countDocuments({ role: 'fleet_owner' }),
+        Vehicle.countDocuments({}),
+        User.countDocuments({ role: 'driver', fleetOwnerId: { $ne: null } }),
+      ]);
+      res.json({ overview: { owners, vehicles, drivers } });
+    } catch (err) {
+      next(err);
+    }
+  });
   // --- Ambulance aggregator (GoI National Ambulance Code / state permits) ---
   router.get('/ambulance-config', async (_req, res, next) => {
     try {
@@ -1204,3 +1250,4 @@ export default function adminRoutes(io) {
 
   return router;
 }
+
