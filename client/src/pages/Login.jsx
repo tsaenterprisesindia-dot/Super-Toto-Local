@@ -44,7 +44,7 @@ export default function Login() {
     setError('');
   };
 
-  const goHome = (user) => navigate(user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : '/ride');
+  const goHome = (user) => navigate(user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : user.role === 'fleet_owner' ? '/fleet' : '/ride');
 
   const submitPassword = async (e) => {
     e.preventDefault();

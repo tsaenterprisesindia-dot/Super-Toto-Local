@@ -20,7 +20,7 @@ export default function Landing() {
       .catch(() => {});
   }, []);
 
-  const start = user ? (user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : '/ride') : '/login';
+  const start = user ? (user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : user.role === 'fleet_owner' ? '/fleet' : '/ride') : '/login';
   const bookRide = user?.role === 'rider' ? '/ride' : start;
   const helplinePhone = contact.helplinePhone || DEFAULT_HELPLINE;
   const helplineLabel = contact.helplineLabel || t('nav.helpline');

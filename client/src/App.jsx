@@ -55,7 +55,7 @@ function Protected({ children, roles }) {
   if (loading) return <div className="page-loader">Loadingâ€¦</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) {
-    return <Navigate to={user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : '/'} replace />;
+    return <Navigate to={user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : user.role === 'fleet_owner' ? '/fleet' : '/'} replace />;
   }
   // Terms gate: non-admin users must accept T&C before accessing main features.
   if (user.role !== 'admin' && !user.termsAcceptedAt) {

@@ -18,7 +18,7 @@ export default function Nav() {
     client.get('/contact-config').then(({ data }) => setContact(data.contactConfig || {})).catch(() => {});
   }, []);
 
-  const home = user?.role === 'driver' ? '/driver' : user?.role === 'admin' ? '/admin' : '/ride';
+  const home = user?.role === 'driver' ? '/driver' : user?.role === 'admin' ? '/admin' : user?.role === 'fleet_owner' ? '/fleet' : '/ride';
   const helplineLabel = contact.helplineLabel || t('nav.helpline');
 
   const doLogout = () => {
