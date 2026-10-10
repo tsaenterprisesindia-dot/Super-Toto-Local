@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import User from '../models/User.js';
 import Ride from '../models/Ride.js';
+import Vehicle from '../models/Vehicle.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
