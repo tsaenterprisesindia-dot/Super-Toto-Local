@@ -27,6 +27,7 @@ const PASSWORDS = {
   driver1: 'Driver@Toto9',
   driver2: 'Driver@Toto9',
   driver3: 'Driver@Toto9',
+  fleet: 'Fleet@Toto2k26',
 };
 
 function buildRideData({ rider, driver, pickupIdx, dropIdx, daysAgo, paid = true, rated = true, method = 'UPI' }) {
@@ -68,6 +69,7 @@ async function seedDatabase() {
   const adminPw = await bcrypt.hash(PASSWORDS.admin, 10);
   const riderPw = await bcrypt.hash(PASSWORDS.rider, 10);
   const driverPw = await bcrypt.hash(PASSWORDS.driver1, 10);
+  const fleetPw = await bcrypt.hash(PASSWORDS.fleet, 10);
 
   const admin = await User.create({
     name: 'Toto Admin',
@@ -166,7 +168,7 @@ async function seedDatabase() {
     name: 'Fleet Owner Demo',
     email: 'fleet@supertoto.local',
     phone: '9000000010',
-    password: adminPw,
+    password: fleetPw,
     role: 'fleet_owner',
     termsAcceptedAt: new Date(),
     termsVersion: '1.0',
@@ -214,17 +216,6 @@ async function seedDatabase() {
     ],
   });
 
-  const fleetOwner = await User.create({
-    name: 'Fleet Owner Demo',
-    email: 'fleet@supertoto.local',
-    phone: '9000000010',
-    password: adminPw,
-    role: 'fleet_owner',
-    termsAcceptedAt: new Date(),
-    termsVersion: '1.0',
-    privacyConsentAt: new Date(),
-    privacyConsentVersion: '1.0',
-  });
   await AmbulanceCompliance.create({
     driver: ambulanceDriver._id,
     stateCode: 'SK',
@@ -242,17 +233,6 @@ async function seedDatabase() {
     reviewedAt: new Date(),
   });
 
-  const fleetOwner = await User.create({
-    name: 'Fleet Owner Demo',
-    email: 'fleet@supertoto.local',
-    phone: '9000000010',
-    password: adminPw,
-    role: 'fleet_owner',
-    termsAcceptedAt: new Date(),
-    termsVersion: '1.0',
-    privacyConsentAt: new Date(),
-    privacyConsentVersion: '1.0',
-  });
   await AmbulanceCompliance.create({
     driver: ambulanceDriver._id,
     stateCode: 'BR',
@@ -303,10 +283,31 @@ async function seedDatabase() {
   return { admin, rider, driver1, driver2, driver3, ambulanceDriver, rides };
 }
 
+export async function ensureDemoFleetOwner() {
+  const existing = await User.findOne({ email: 'fleet@supertoto.local' });
+  if (existing) return existing;
+  const fleetPw = await bcrypt.hash(PASSWORDS.fleet, 10);
+  const fleetOwner = await User.create({
+    name: 'Fleet Owner Demo',
+    email: 'fleet@supertoto.local',
+    phone: '9000000010',
+    password: fleetPw,
+    role: 'fleet_owner',
+    termsAcceptedAt: new Date(),
+    termsVersion: '1.0',
+    privacyConsentAt: new Date(),
+    privacyConsentVersion: '1.0',
+  });
+  console.log(`[seed]   fleet: fleet@supertoto.local / ${PASSWORDS.fleet}`);
+  return fleetOwner;
+}
+
 export async function seedIfEmpty(mongoServer) {
   const count = await User.countDocuments();
   if (count > 0) {
     console.log(`[seed] database already has ${count} users, skipping seed`);
+    await ensureDemoFleetOwner();
+    await mongoServer?.waitUntilReady?.();
     return;
   }
   const { rider, driver1 } = await seedDatabase();
@@ -314,6 +315,7 @@ export async function seedIfEmpty(mongoServer) {
   console.log(`[seed]   rider:  rider@supertoto.local / ${PASSWORDS.rider}`);
   console.log(`[seed]   driver: driver@supertoto.local / ${PASSWORDS.driver1}`);
   console.log(`[seed]   admin:  admin@supertoto.local / ${PASSWORDS.admin}`);
+  console.log(`[seed]   fleet:  fleet@supertoto.local / ${PASSWORDS.fleet}`);
   console.log('[seed]   face login: log in with password, then enroll a face in Profile to enable Face Recognition');
   await mongoServer?.waitUntilReady?.();
 }
@@ -328,6 +330,7 @@ if (process.argv[1]?.endsWith('seed.js')) {
   } else {
     console.log(`[seed] database already has ${count} users, skipping`);
   }
+  await ensureDemoFleetOwner();
   await stopDB();
 }
 

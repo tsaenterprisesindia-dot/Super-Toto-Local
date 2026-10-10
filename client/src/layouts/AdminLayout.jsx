@@ -22,6 +22,7 @@ const LINKS = [
   { to: '/admin/feedback', label: '💬 Feedback' },
   { to: '/admin/compliance', label: '🗂️ Compliance' },
   { to: '/admin/ambulances', label: '🚑 Ambulance' },
+  { to: '/admin/fleet', label: '🚛 Fleet Owners' },
   { to: '/admin/emergency', label: '🆘 Helplines' },
   { to: '/admin/settings', label: '⚙️ Settings' },
 ];
