@@ -49,7 +49,8 @@ export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [role, setRole] = useState(searchParams.get('role') === 'driver' ? 'driver' : 'rider');
+  const roleParam = searchParams.get('role');
+  const [role, setRole] = useState(roleParam === 'driver' ? 'driver' : roleParam === 'fleet' || roleParam === 'fleet_owner' ? 'fleet_owner' : 'rider');
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -131,6 +132,7 @@ export default function Register() {
       const { user } = await register({ ...form, role, otp, privacyConsent: true });
       if (user.role === 'admin') navigate('/admin');
       else if (user.role === 'driver') navigate('/driver/documents');
+      else if (user.role === 'fleet_owner') navigate('/fleet');
       else navigate('/ride');
     } catch (err) {
       setErr(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? 'Cannot reach server. Make sure the server is running.' : 'Registration failed'));
@@ -173,10 +175,14 @@ export default function Register() {
         <div className="tab-row">
           <button className={`tab${role === 'rider' ? ' active' : ''}`} onClick={() => { setRole('rider'); setTermsAccepted(false); }}>Book a Ride</button>
           <button className={`tab${role === 'driver' ? ' active' : ''}`} onClick={() => { setRole('driver'); setTermsAccepted(false); }}>Driver Panel</button>
+          <button className={`tab${role === 'fleet_owner' ? ' active' : ''}`} onClick={() => { setRole('fleet_owner'); setTermsAccepted(false); }}>Fleet Owner</button>
         </div>
 
         {role === 'driver' && (
           <p className="hint">Driver accounts need admin approval to go online: upload documents (incl. Police Clearance), sign the Aggregator Agreement, and complete training on the Driver page. (The seeded driver already works.)</p>
+        )}
+        {role === 'fleet_owner' && (
+          <p className="hint">Fleet owner accounts need admin approval before accessing the fleet dashboard.</p>
         )}
 
         <form onSubmit={submit}>

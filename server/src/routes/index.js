@@ -72,8 +72,6 @@ export default function routes(io) {
   router.use('/chatbot', chatbotRoutes());
   router.use('/feedback', feedbackRoutes());
   router.use('/fleet', fleetRoutes());
-  router.use('/fleet', fleetRoutes());
-  router.use('/fleet', fleetRoutes());
   
   router.use('/notifications', notificationRoutes());
   router.use('/ambulance', ambulanceRoutes());

@@ -895,6 +895,24 @@ export default function adminRoutes(io) {
       next(err);
     }
   });
+
+  router.patch('/fleet-owners/:id/status', async (req, res, next) => {
+    try {
+      const { status } = req.body || {};
+      if (!['pending', 'approved', 'blocked'].includes(String(status))) {
+        return res.status(400).json({ message: 'Invalid status' });
+      }
+      const owner = await User.findById(req.params.id);
+      if (!owner || owner.role !== 'fleet_owner') {
+        return res.status(404).json({ message: 'Fleet owner not found' });
+      }
+      owner.fleetStatus = String(status);
+      await owner.save();
+      res.json({ message: 'Fleet owner status updated', owner: owner.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
+  });
   // --- Ambulance aggregator (GoI National Ambulance Code / state permits) ---
   router.get('/ambulance-config', async (_req, res, next) => {
     try {

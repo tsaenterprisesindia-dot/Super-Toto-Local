@@ -57,7 +57,7 @@ export default function authRoutes() {
         return res.status(409).json({ message: 'An account with this email or mobile number already exists' });
       }
 
-      const userRole = ['rider', 'driver'].includes(role) ? role : 'rider';
+      const userRole = ['rider', 'driver', 'fleet_owner'].includes(role) ? role : 'rider';
 
       // DPDP 2023: capture explicit consent (required for non-admin accounts)
       if (userRole !== 'admin' && privacyConsent !== true && String(privacyConsent) !== 'true') {
@@ -98,6 +98,7 @@ export default function authRoutes() {
         vehicleType: userRole === 'driver' ? vehicleType || 'Toto (E-Rickshaw)' : undefined,
         vehicleNumber: userRole === 'driver' ? vehicleNumber || '' : undefined,
         driverStatus: userRole === 'driver' ? 'pending' : undefined,
+        fleetStatus: userRole === 'fleet_owner' ? 'pending' : undefined,
       });
 
       const token = signToken(user);
@@ -129,9 +130,17 @@ export default function authRoutes() {
         if (!user) {
           return res.status(404).json({ message: 'No account found with this mobile number. Create an account first.' });
         }
-        if (user.isHidden) {
-          return res.status(403).json({ message: 'This account has been deactivated. Contact the admin.' });
+      if (user.isHidden) {
+        return res.status(403).json({ message: 'This account has been deactivated. Contact the admin.' });
+      }
+      if (user.role === 'fleet_owner') {
+        if (user.fleetStatus === 'pending') {
+          return res.status(403).json({ message: 'Your fleet account is pending admin approval.' });
         }
+        if (user.fleetStatus === 'blocked') {
+          return res.status(403).json({ message: 'Your fleet account has been blocked.' });
+        }
+      }
         if (user.suspension?.active && (!user.suspension.until || user.suspension.until > new Date())) {
           return res.status(403).json({ message: 'This account is currently suspended. Contact the admin.' });
         }
@@ -175,6 +184,20 @@ export default function authRoutes() {
           });
         }
       }
+      if (user.role === 'driver' && user.driverStatus === 'pending') {
+        return res.status(403).json({ message: 'Your driver account is pending admin approval.' });
+      }
+      if (user.role === 'driver' && user.driverStatus === 'blocked') {
+        return res.status(403).json({ message: 'Your driver account has been blocked.' });
+      }
+      if (user.role === 'fleet_owner') {
+        if (user.fleetStatus === 'pending') {
+          return res.status(403).json({ message: 'Your fleet account is pending admin approval.' });
+        }
+        if (user.fleetStatus === 'blocked') {
+          return res.status(403).json({ message: 'Your fleet account has been blocked.' });
+        }
+      }
       const token = signToken(user);
       res.json({ token, user: user.toSafeJSON() });
     } catch (err) {
@@ -204,6 +227,34 @@ export default function authRoutes() {
           });
         }
       }
+      if (user.role === 'driver' && user.driverStatus === 'pending') {
+        return res.status(403).json({ message: 'Your driver account is pending admin approval.' });
+      }
+      if (user.role === 'driver' && user.driverStatus === 'blocked') {
+        return res.status(403).json({ message: 'Your driver account has been blocked.' });
+      }
+      if (user.role === 'fleet_owner') {
+        if (user.fleetStatus === 'pending') {
+          return res.status(403).json({ message: 'Your fleet account is pending admin approval.' });
+        }
+        if (user.fleetStatus === 'blocked') {
+          return res.status(403).json({ message: 'Your fleet account has been blocked.' });
+        }
+      }
+      if (user.role === 'driver' && user.driverStatus === 'pending') {
+        return res.status(403).json({ message: 'Your driver account is pending admin approval.' });
+      }
+      if (user.role === 'driver' && user.driverStatus === 'blocked') {
+        return res.status(403).json({ message: 'Your driver account has been blocked.' });
+      }
+      if (user.role === 'fleet_owner') {
+        if (user.fleetStatus === 'pending') {
+          return res.status(403).json({ message: 'Your fleet account is pending admin approval.' });
+        }
+        if (user.fleetStatus === 'blocked') {
+          return res.status(403).json({ message: 'Your fleet account has been blocked.' });
+        }
+      }
 
       const token = signToken(user);
       res.json({ token, user: user.toSafeJSON() });
@@ -226,6 +277,20 @@ export default function authRoutes() {
       }
       if (user.role === 'admin') {
         return res.status(403).json({ message: 'Admin must log in with password' });
+      }
+      if (user.role === 'fleet_owner') {
+        if (user.fleetStatus === 'pending') {
+          return res.status(403).json({ message: 'Your fleet account is pending admin approval.' });
+        }
+        if (user.fleetStatus === 'blocked') {
+          return res.status(403).json({ message: 'Your fleet account has been blocked.' });
+        }
+      }
+      if (user.role === 'driver' && user.driverStatus === 'pending') {
+        return res.status(403).json({ message: 'Your driver account is pending admin approval.' });
+      }
+      if (user.role === 'driver' && user.driverStatus === 'blocked') {
+        return res.status(403).json({ message: 'Your driver account has been blocked.' });
       }
       if (!user.faceRegistered || !user.faceDescriptor.length) {
         return res.status(403).json({ message: 'No face enrolled. Log in with password and register your face first.' });

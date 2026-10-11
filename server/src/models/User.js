@@ -57,6 +57,12 @@ const userSchema = new mongoose.Schema(
       enum: ['pending', 'approved', 'blocked'],
       default: 'pending',
     },
+    // Fleet owner status (self-registration requires admin approval)
+    fleetStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'blocked'],
+      default: 'pending',
+    },
 
     // Rider identity verification
     aadhaarNumber: { type: String, default: '' },
