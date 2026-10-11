@@ -123,3 +123,4 @@ export function buildGstInvoice(ride, compliance = {}) {
       'GST payable under Section 9(5) of the CGST Act, 2017 — collected and remitted by the platform on behalf of the driver. Supply of road passenger transport (SAC 9964).',
   };
 }
+export async function generateInvoiceNumber(prefix){const d=new Date();return ((prefix==null)?" STL:String(prefix)).toUpperCase()+-+d.getFullYear()+String(d.getMonth()+1).padStart(2,0)+-+String(Date.now()).slice(-6);}

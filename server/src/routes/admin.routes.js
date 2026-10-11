@@ -9,7 +9,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
 import { Promo } from '../models/Promo.js';
-import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, getEmergencyConfig, saveEmergencyConfig, getAmbulanceConfig, saveAmbulanceConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy } from '../services/settings.js';
+import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, getEmergencyConfig, saveEmergencyConfig, getAmbulanceConfig, saveAmbulanceConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy, getGstConfig, saveGstConfig } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 import { notifyUser } from '../services/notify.js';
 import AmbulanceCompliance from '../models/AmbulanceCompliance.js';
@@ -846,6 +846,19 @@ export default function adminRoutes(io) {
     try {
       const policy = await saveStateFarePolicy(req.params.stateCode, req.body || {}, req.user?.email || 'admin');
       res.json({ policy, message: 'Fare policy saved' });
+    } catch (err) { next(err); }
+  });
+
+  router.get('/gst-config', async (_req, res, next) => {
+    try {
+      res.json({ gstConfig: await getGstConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/gst-config', async (req, res, next) => {
+    try {
+      const gstConfig = await saveGstConfig(req.body || {}, req.user?.email || 'admin');
+      res.json({ gstConfig, message: 'GST config saved' });
     } catch (err) { next(err); }
   });
 

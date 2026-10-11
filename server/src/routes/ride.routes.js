@@ -12,7 +12,7 @@ import {
   isAmbulanceVehicle,
   VEHICLE_TYPES,
 } from '../utils/pricing.js';
-import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, getAmbulanceConfig, isAmbulanceEnabledForState, SEAT_MODES, resolveFarePolicy, stateForCoords } from '../services/settings.js';
+import { getPricingConfig, getVehicleRatesConfig, getFeedbackConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, getAmbulanceConfig, isAmbulanceEnabledForState, SEAT_MODES, resolveFarePolicy, stateForCoords, getGstConfig } from '../services/settings.js';
 import { telephonyEnabled, sendEmergencyAlerts, publicUrl } from '../services/telephony.js';
 import { settleCashDue } from '../services/cashSettlement.js';
 import { notifyUser, notifyAdmins } from '../services/notify.js';
@@ -129,6 +129,8 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   const luggageCharge = computeLuggageCharge(luggageCount, luggageHeavyCount, cfg);
   const { tripFare, perSeatFare } = computeSharedFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, seatCount);
   const riderFare = reserved ? tripFare.total : perSeatFare * bookedSeats;
+  const effectiveGst = { ...tripFare };
+  if (effectiveGst.taxableValue === undefined) effectiveGst.taxableValue = effectiveGst.gross;
   return {
     luggageCount,
     luggageHeavyCount,

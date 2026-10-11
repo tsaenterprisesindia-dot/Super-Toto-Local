@@ -125,9 +125,49 @@ export const STATE_DEFAULT_POLICY = {
   lastUpdatedAt: '',
 };
 
+export const GST_DEFAULT_CONFIG = {
+  gstin: '',
+  companyName: 'TSA Enterprises India',
+  registeredStateCode: 'SK',
+  sacCodeDefault: '996412',
+  invoicePrefix: 'STL',
+  invoiceSeriesStart: 100001,
+  gstRatePct: 5,
+  notes: '',
+  lastUpdatedBy: '',
+  lastUpdatedAt: '',
+};
+
 export async function getStateFares() {
   const doc = await Settings.findOne();
   return doc?.stateFares || {};
+}
+
+export async function getGstConfig() {
+  const doc = await Settings.findOne();
+  const cfg = doc?.gstConfig && typeof doc.gstConfig === 'object' ? doc.gstConfig : {};
+  return { ...GST_DEFAULT_CONFIG, ...cfg };
+}
+
+export async function saveGstConfig(input = {}, adminEmail = '') {
+  const doc = (await Settings.findOne()) || new Settings();
+  const prev = await getGstConfig();
+  const cfg = {
+    ...prev,
+    gstin: typeof input.gstin === 'string' ? input.gstin.trim().toUpperCase() : prev.gstin,
+    companyName: typeof input.companyName === 'string' ? input.companyName.trim() : prev.companyName,
+    registeredStateCode: typeof input.registeredStateCode === 'string' ? input.registeredStateCode.trim().toUpperCase() : prev.registeredStateCode,
+    sacCodeDefault: typeof input.sacCodeDefault === 'string' ? input.sacCodeDefault.trim() : prev.sacCodeDefault,
+    invoicePrefix: typeof input.invoicePrefix === 'string' ? input.invoicePrefix.trim().toUpperCase() : prev.invoicePrefix,
+    invoiceSeriesStart: input.invoiceSeriesStart === undefined || input.invoiceSeriesStart === null || input.invoiceSeriesStart === '' ? prev.invoiceSeriesStart : Math.max(1, Math.round(Number(input.invoiceSeriesStart))),
+    gstRatePct: input.gstRatePct === undefined || input.gstRatePct === null || input.gstRatePct === '' ? prev.gstRatePct : Math.max(0, Number(input.gstRatePct)),
+    notes: typeof input.notes === 'string' ? input.notes.trim() : prev.notes,
+    lastUpdatedBy: adminEmail || prev.lastUpdatedBy,
+    lastUpdatedAt: new Date().toISOString(),
+  };
+  doc.gstConfig = cfg;
+  await doc.save();
+  return cfg;
 }
 
 export async function getStateFarePolicy(stateCode, { activeOnly = true } = {}) {

@@ -55,12 +55,15 @@ const rideSchema = new mongoose.Schema(
       surge: { type: Number, default: 1 },
       subtotal: { type: Number, default: 0 }, // fare before surge & tax
       gross: { type: Number, default: 0 }, // subtotal x surge
+      taxableValue: { type: Number, default: 0 },
       gst: { type: Number, default: 0 }, // 5% GST collected
       cgst: { type: Number, default: 0 }, // CGST 2.5% (intra-state)
       sgst: { type: Number, default: 0 }, // SGST 2.5% (intra-state)
       igst: { type: Number, default: 0 }, // IGST 5% (inter-state)
       gstRatePct: { type: Number, default: 5 },
       supplyType: { type: String, default: 'intra' }, // intra | inter
+      sacCode: { type: String, default: '996412' },
+      placeOfSupplyStateCode: { type: String, default: '' },
       commission: { type: Number, default: 0 }, // platform commission
       driverEarnings: { type: Number, default: 0 }, // gross - commission
       total: { type: Number, default: 0 },
@@ -160,6 +163,13 @@ const rideSchema = new mongoose.Schema(
 
     // Per-trip driver identity verification (selfie matched against enrolled face)
     driverSelfieVerifiedAt: { type: Date, default: null },
+
+    // Invoice details
+    invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', default: null },
+    invoiceNumber: { type: String, default: '' },
+    invoiceDate: { type: Date, default: null },
+    payoutEntity: { type: String, enum: ['driver', 'fleet_owner'], default: 'driver' },
+    fleetOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
     // Promo code applied by the ride creator (affects only their fare)
     promo: {

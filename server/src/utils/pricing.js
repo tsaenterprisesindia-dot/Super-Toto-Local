@@ -168,6 +168,7 @@ export function computeFare(distanceKm, durationMin, surge = 1, cfg = PRICING, l
   const gross = Math.round(subtotal * surge); // what the fare earns pre-tax
   // Automatic GST (5%) split: CGST 2.5% + SGST 2.5% (intra-state) or IGST 5% (inter-state).
   const gstRate = cfg.gstRate || 0.05;
+  const taxableValue = gross;
   const gst = Math.round(gross * gstRate); // GST paid by the rider
   const intra = isIntraState(cfg);
   const cgst = intra ? Math.round(gst / 2) : 0;
@@ -185,6 +186,7 @@ export function computeFare(distanceKm, durationMin, surge = 1, cfg = PRICING, l
     surge,
     subtotal,
     gross,
+    taxableValue,
     gst,
     cgst,
     sgst,
