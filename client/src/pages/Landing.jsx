@@ -27,20 +27,12 @@ export default function Landing() {
   const showHelpline = contact.showHelpline !== false && !!helplinePhone;
 
   const features = [
-    { to: bookRide, icon: '🚑', title: t('landing.featureAmbulanceTitle'), sub: t('landing.featureAmbulanceSub'), urgent: true },
     { to: bookRide, icon: '📱', title: t('landing.featureBookTitle'), sub: t('landing.featureBookSub') },
     { to: bookRide, icon: '🛰️', title: t('landing.featureTrackTitle'), sub: t('landing.featureTrackSub') },
-    { to: '/register?role=driver', icon: '🛺', title: t('landing.featureDriverTitle'), sub: t('landing.featureDriverSub') },
-    { to: '/login?role=admin', icon: '📊', title: t('landing.featureAdminTitle'), sub: t('landing.featureAdminSub') },
     { to: bookRide, icon: '💳', title: t('landing.featurePayTitle'), sub: t('landing.featurePaySub') },
     { to: bookRide, icon: '⭐', title: t('landing.featureRateTitle'), sub: t('landing.featureRateSub') },
-  ];
-
-  const trustItems = [
-    { icon: '✅', label: t('landing.trustVerified') },
-    { icon: '🛰️', label: t('landing.trustTracking') },
-    { icon: '🕐', label: t('landing.trust247') },
-    { icon: '🔐', label: t('landing.trustSecure') },
+    { to: '/register?role=driver', icon: '🛺', title: t('landing.featureDriverTitle'), sub: t('landing.featureDriverSub') },
+    { to: '/login?role=admin', icon: '📊', title: t('landing.featureAdminTitle'), sub: t('landing.featureAdminSub') },
   ];
 
   const steps = [
@@ -78,37 +70,32 @@ export default function Landing() {
             </a>
           )}
           <LanguageSwitcher />
-          <Link to={start} className="btn btn-primary">
-            {user ? t('landing.openApp') : t('landing.login')}
-          </Link>
         </div>
       </header>
 
       <section className="hero">
-        <div className="hero-chips">
-          <span className="chip chip-active hero-chip">{t('landing.heroChip')}</span>
-          <span className="chip">
-            ✅ {t('landing.trustVerified')} · ⏰ {t('landing.trust247')}
-          </span>
-        </div>
+        <span className="chip chip-active hero-chip">{t('landing.heroChip')}</span>
 
         <h1>
-          {t('landing.heroTitle1')} <span className="accent">toto</span>,<br />
+          {t('landing.heroTitle1')}
+          <span className="accent">,</span>
+          <br />
           {t('landing.heroTitle2')}
         </h1>
         <p>{t('landing.heroSub')}</p>
 
         <div className="hero-btns" data-tt="landing-cta">
-          <Link to={start} className="btn btn-primary btn-lg">
-            {user ? t('landing.openApp') : t('landing.ctaRide')}
-          </Link>
-          {!user && (
+          {user ? (
+            <Link to={start} className="btn btn-primary btn-lg">
+              {t('landing.openApp')}
+            </Link>
+          ) : (
             <>
+              <Link to="/login" className="btn btn-primary btn-lg">
+                {t('landing.ctaRide')}
+              </Link>
               <Link to="/register" className="btn btn-ghost btn-lg">
                 {t('landing.signupFree')}
-              </Link>
-              <Link to="/login" className="btn btn-ghost btn-lg">
-                {t('landing.login')}
               </Link>
             </>
           )}
@@ -132,15 +119,6 @@ export default function Landing() {
             </a>
           </div>
         </div>
-
-        <div className="trust-row">
-          {trustItems.map((item) => (
-            <span className="trust-item" key={item.label}>
-              <span aria-hidden="true">{item.icon}</span>
-              {item.label}
-            </span>
-          ))}
-        </div>
       </section>
 
       <section className="landing-section">
@@ -150,7 +128,7 @@ export default function Landing() {
         </div>
         <div className="features" data-tt="landing-features">
           {features.map((f) => (
-            <Link to={f.to} className={`feature${f.urgent ? ' feature-urgent' : ''}`} key={f.title}>
+            <Link to={f.to} className="feature" key={f.title}>
               <div className="icon">{f.icon}</div>
               <h4>{f.title}</h4>
               <p>{f.sub}</p>
@@ -189,19 +167,6 @@ export default function Landing() {
       </section>
 
       <footer className="landing-legal">
-        {showHelpline && (
-          <div className="landing-helpline">
-            <a
-              className="helpline-btn"
-              href={`tel:${helplinePhone}`}
-              title={t('nav.helplineTitle', { label: helplineLabel, phone: helplinePhone })}
-            >
-              <span className="helpline-icon">🆘</span>
-              <span>{helplineLabel}</span>
-            </a>
-            <span className="small muted">{t('landing.emergencyNote')}</span>
-          </div>
-        )}
         <div className="small muted">
           Legal: <Link to="/legal/privacy">Privacy Policy (DPDP)</Link> ·{' '}
           <Link to="/legal/disclosures">Disclosures</Link> ·{' '}
@@ -216,23 +181,6 @@ export default function Landing() {
           Ministry of Road Transport &amp; Highways, GoI
         </div>
       </footer>
-
-      <div className="landing-sticky" data-tt="landing-sticky">
-        <Link to={start} className="btn btn-primary">
-          {user ? t('landing.openApp') : t('landing.ctaRideShort')}
-        </Link>
-        <Link to={bookRide} className="btn btn-danger">
-          🚑 {t('landing.ambulanceCta')}
-        </Link>
-        <a
-          href={`tel:${helplinePhone}`}
-          className="btn btn-ghost sticky-call"
-          aria-label={t('landing.callHelpline', { phone: helplinePhone })}
-          title={t('landing.callHelpline', { phone: helplinePhone })}
-        >
-          📞
-        </a>
-      </div>
     </div>
   );
 }
