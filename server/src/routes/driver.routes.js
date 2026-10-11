@@ -344,6 +344,44 @@ export default function driverRoutes(io) {
       req.ride.status = 'completed';
       req.ride.completedAt = new Date();
       await req.ride.save();
+      try {
+        if (!req.ride.invoiceId) {
+          const { generateInvoiceNumber } = await import('../utils/invoice.js');
+          const { getGstConfig } = await import('../services/settings.js');
+          const gstCfg = await getGstConfig();
+          const invoiceNumber = await generateInvoiceNumber(gstCfg.invoicePrefix || 'STL');
+          const inv = await Invoice.create({
+            invoiceNumber,
+            ride: req.ride._id,
+            rider: req.ride.rider,
+            driver: req.ride.driver,
+            fleetOwner: req.ride.fleetOwnerId || null,
+            payoutEntity: req.ride.payoutEntity || (req.ride.fleetOwnerId ? 'fleet_owner' : 'driver'),
+            invoiceDate: req.ride.completedAt || new Date(),
+            supplyDate: req.ride.completedAt || new Date(),
+            operatorStateCode: gstCfg.registeredStateCode || '',
+            placeOfSupplyStateCode: req.ride.fareBreakup?.placeOfSupplyStateCode || req.ride.stateCode || '',
+            sacCode: req.ride.fareBreakup?.sacCode || '996412',
+            vehicleType: req.ride.vehicleType || '',
+            category: req.ride.category || 'taxi',
+            taxableValue: req.ride.fareBreakup?.taxableValue ?? req.ride.fareBreakup?.gross ?? 0,
+            cgst: req.ride.fareBreakup?.cgst ?? 0,
+            sgst: req.ride.fareBreakup?.sgst ?? 0,
+            igst: req.ride.fareBreakup?.igst ?? 0,
+            gstTotal: req.ride.fareBreakup?.gst ?? 0,
+            gstRatePct: req.ride.fareBreakup?.gstRatePct ?? 5,
+            supplyType: req.ride.fareBreakup?.supplyType || 'intra',
+            fareTotal: req.ride.fareBreakup?.total ?? req.ride.fare ?? 0,
+            status: 'issued',
+          });
+          req.ride.invoiceId = inv._id;
+          req.ride.invoiceNumber = inv.invoiceNumber;
+          req.ride.invoiceDate = inv.invoiceDate;
+          if (req.ride.payoutEntity == null) req.ride.payoutEntity = inv.payoutEntity;
+          await req.ride.save();
+        }
+      } catch (e) { console.error('invoice gen err', e); }
+
 
       await User.findByIdAndUpdate(req.user.id, {
         currentRide: null,
