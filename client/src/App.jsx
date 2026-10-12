@@ -40,6 +40,7 @@ import AdminSettings from './pages/admin/AdminSettings.jsx';
 import AdminVehicleRates from './pages/admin/AdminVehicleRates.jsx';
 import AdminAds from './pages/admin/AdminAds.jsx';
 import AdminSafetyTips from './pages/admin/AdminSafetyTips.jsx';
+import AdminCAExports from './pages/admin/AdminCAExports.jsx';
 import AdminBikeTaxi from './pages/admin/AdminBikeTaxi.jsx';
 import AdminFeedback from './pages/admin/AdminFeedback.jsx';
 import AdminCompliance from './pages/admin/AdminCompliance.jsx';
@@ -216,6 +217,7 @@ export default function App() {
         <Route path="vehicle-rates" element={<AdminVehicleRates />} />
         <Route path="ads" element={<AdminAds />} />
         <Route path="safety-tips" element={<AdminSafetyTips />} />
+            <Route path="admin/ca-exports" element={<ProtectedRoute role="admin"><AdminCAExports /></ProtectedRoute>} />
         <Route path="bike-taxi" element={<AdminBikeTaxi />} />
         <Route path="feedback" element={<AdminFeedback />} />
         <Route path="compliance" element={<AdminCompliance />} />
