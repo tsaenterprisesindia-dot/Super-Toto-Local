@@ -612,6 +612,29 @@ export default function rideRoutes(io) {
     }
   });
 
+  // PDF invoice (returns printable HTML)
+  router.get('/:id/invoice/pdf', async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) return res.status(404).json({ message: 'Ride not found' });
+      const ride = await Ride.findById(req.params.id);
+      if (!ride) return res.status(404).json({ message: 'Ride not found' });
+      const isAllowed =
+        req.user.role === 'admin' ||
+        String(ride.rider) === String(req.user.id) ||
+        String(ride.driver || '') === String(req.user.id) ||
+        (ride.occupants || []).some((o) => String(o.rider) === String(req.user.id)) ||
+        (req.user.role === 'fleet_owner' && ride.fleetOwnerId && String(ride.fleetOwnerId) === String(req.user.id));
+      if (!isAllowed) return res.status(403).json({ message: 'Not your ride' });
+      const compliance = await getComplianceConfig();
+      const invoice = buildGstInvoice(ride, compliance);
+      const { renderInvoiceHtml } = await import('../utils/invoicePdf.js');
+      const html = renderInvoiceHtml(invoice);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', 'inline; filename="invoice_' + (invoice.invoiceNo || ride._id) + '.html"');
+      res.send(html);
+    } catch (e) { next(e); }
+  });
+
   router.get('/:id', async (req, res, next) => {
     try {
       if (!mongoose.isValidObjectId(req.params.id)) {

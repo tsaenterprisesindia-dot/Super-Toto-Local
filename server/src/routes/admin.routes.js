@@ -1280,6 +1280,118 @@ export default function adminRoutes(io) {
     }
   });
 
+
+  // --- CA/GST Exports (admin only) ---
+  router.get('/export/gst/gstr1', async (req, res, next) => {
+    try {
+      const Invoice = (await import('../models/Invoice.js')).default;
+      const { month } = req.query;
+      let start, end;
+      if (month && /^d{4}-d{2}$/.test(String(month))) {
+        const [y, m] = String(month).split('-');
+        start = new Date(Number(y), Number(m) - 1, 1);
+        end = new Date(Number(y), Number(m), 1);
+      } else {
+        const now = new Date();
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      }
+      const invoices = await Invoice.find({ invoiceDate: { $gte: start, $lt: end }, status: 'issued' }).populate('ride rider driver').lean();
+      const header = ['Invoice No','Invoice Date','Billing Type','GSTIN','Rider Name','Rider Phone','POS State','Supply Type','SAC','Vehicle Type','Taxable Value','CGST','SGST','IGST','GST Total','Fare Total','Ride ID'];
+      const esc = (v) => {
+        const s = String(v == null ? '' : v);
+        if (s.includes(',') || s.includes('"') || s.includes('
+')) {
+          return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+      };
+      const rows = invoices.map((inv) => {
+        const pos = inv.placeOfSupplyStateCode || '';
+        let sup = inv.supplyType || 'intra';
+        if (!inv.supplyType && inv.operatorStateCode && pos && inv.operatorStateCode !== pos) sup = 'inter';
+        const riderName = inv.rider && inv.rider.name ? inv.rider.name : '';
+        const riderPhone = inv.rider && inv.rider.phone ? inv.rider.phone : '';
+        const rideId = inv.ride ? String(inv.ride._id || inv.ride) : '';
+        return [inv.invoiceNumber, inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().slice(0,10) : '', inv.billingType || 'b2c', '', riderName, riderPhone, pos, sup, inv.sacCode || '996412', inv.vehicleType || '', inv.taxableValue || 0, inv.cgst || 0, inv.sgst || 0, inv.igst || 0, inv.gstTotal || 0, inv.fareTotal || 0, rideId];
+      });
+      const csv = [header.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))].join('
+');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="gstr1_export_' + (month || start.toISOString().slice(0,7)) + '.csv"');
+      res.send(csv);
+    } catch (e) { next(e); }
+  });
+  router.get('/export/gst/summary', async (req, res, next) => {
+    try {
+      const Invoice = (await import('../models/Invoice.js')).default;
+      const { month } = req.query;
+      let start, end;
+      if (month && /^d{4}-d{2}$/.test(String(month))) {
+        const [y, m] = String(month).split('-');
+        start = new Date(Number(y), Number(m)-1, 1);
+        end = new Date(Number(y), Number(m), 1);
+      } else {
+        const now = new Date();
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth()+1, 1);
+      }
+      const invoices = await Invoice.find({ invoiceDate: { $gte: start, $lt: end }, status: 'issued' }).lean();
+      const key = (s,r)=> s+'|'+r;
+      const map = new Map();
+      for (const inv of invoices) {
+        const sup = inv.supplyType || 'intra';
+        const rate = inv.gstRatePct || 5;
+        const k = key(sup, rate);
+        const t = map.get(k) || { supplyType:sup, gstRatePct:rate, taxableValue:0, cgst:0, sgst:0, igst:0, gstTotal:0, count:0 };
+        t.taxableValue += (inv.taxableValue||0); t.cgst += (inv.cgst||0); t.sgst += (inv.sgst||0); t.igst += (inv.igst||0); t.gstTotal += (inv.gstTotal||0); t.count++; map.set(k,t);
+      }
+      const rowsArr = Array.from(map.values());
+      const header = ['Supply Type','GST Rate %','Taxable Value','CGST','SGST','IGST','GST Total','Invoice Count'];
+      const esc = (v)=>{const s=String(v==null?'':v); if(s.includes(',')||s.includes('"')||s.includes('
+')) return '"'+s.replace(/"/g,'""')+'"'; return s;};
+      const rows = rowsArr.map(r=>[r.supplyType,r.gstRatePct,Math.round(r.taxableValue),Math.round(r.cgst),Math.round(r.sgst),Math.round(r.igst),Math.round(r.gstTotal),r.count]);
+      const csv = [header.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('
+');
+      res.setHeader('Content-Type','text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition','attachment; filename="gst_summary_'+(month||start.toISOString().slice(0,7))+'.csv"');
+      res.send(csv);
+    } catch (e) { next(e); }
+  });
+  router.get('/export/accounting/tally', async (req, res, next) => {
+    try {
+      const Invoice = (await import('../models/Invoice.js')).default;
+      const { month } = req.query;
+      let start, end;
+      if (month && /^d{4}-d{2}$/.test(String(month))) {
+        const [y, m] = String(month).split('-');
+        start = new Date(Number(y), Number(m)-1, 1);
+        end = new Date(Number(y), Number(m), 1);
+      } else {
+        const now = new Date();
+        start = new Date(now.getFullYear(), now.getMonth(), 1);
+        end = new Date(now.getFullYear(), now.getMonth()+1, 1);
+      }
+      const invoices = await Invoice.find({ invoiceDate: { $gte: start, $lt: end }, status: 'issued' }).populate('rider driver fleetOwner').lean();
+      const header = ['Voucher Date','Voucher Type','Narration','Party Ledger','Debit','Credit','GST Ledger','GST Amount','Place of Supply','Supply Type'];
+      const esc = (v)=>{const s=String(v==null?'':v); if(s.includes(',')||s.includes('"')||s.includes('
+')) return '"'+s.replace(/"/g,'""')+'"'; return s;};
+      const rows = [];
+      for (const inv of invoices) {
+        const d = inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString('en-IN') : '';
+        const party = inv.rider?.name || inv.driver?.name || 'Customer';
+        const pos = inv.placeOfSupplyStateCode || '';
+        const sup = inv.supplyType || 'intra';
+        const total = inv.fareTotal || 0;
+        rows.push([d,'Sales','Invoice '+inv.invoiceNumber, party, total, 0, 'Output GST', inv.gstTotal||0, pos, sup]);
+      }
+      const csv = [header.map(esc).join(','), ...rows.map(r=>r.map(esc).join(','))].join('
+');
+      res.setHeader('Content-Type','text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition','attachment; filename="tally_export_'+(month||start.toISOString().slice(0,7))+'.csv"');
+      res.send(csv);
+    } catch (e) { next(e); }
+  });
   return router;
 }
 
