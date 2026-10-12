@@ -21,6 +21,7 @@ const LINKS = [
   { to: '/admin/bike-taxi', label: '🏍️ Bike Taxi' },
   { to: '/admin/feedback', label: '💬 Feedback' },
   { to: '/admin/compliance', label: '🗂️ Compliance' },
+          { to: '/admin/ca-exports', label: 'CA Exports' },
   { to: '/admin/ambulances', label: '🚑 Ambulance' },
   { to: '/admin/fleet', label: '🚛 Fleet Owners' },
   { to: '/admin/emergency', label: '🆘 Helplines' },
