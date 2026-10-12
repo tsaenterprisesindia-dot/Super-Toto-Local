@@ -217,7 +217,7 @@ export default function App() {
         <Route path="vehicle-rates" element={<AdminVehicleRates />} />
         <Route path="ads" element={<AdminAds />} />
         <Route path="safety-tips" element={<AdminSafetyTips />} />
-            <Route path="admin/ca-exports" element={<ProtectedRoute role="admin"><AdminCAExports /></ProtectedRoute>} />
+            <Route path="ca-exports" element={<ProtectedRoute role="admin"><AdminCAExports /></ProtectedRoute>} />
         <Route path="bike-taxi" element={<AdminBikeTaxi />} />
         <Route path="feedback" element={<AdminFeedback />} />
         <Route path="compliance" element={<AdminCompliance />} />
