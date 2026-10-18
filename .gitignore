@@ -13,6 +13,9 @@ client/dist/duplicated.assets/
 # Uploaded documents
 server/uploads/
 
+# Local bundled MongoDB data (persistent demo database)
+server/.data/
+
 # Play Store release signing secrets
 PLAY_STORE/keys/
 client/android/keystore.properties

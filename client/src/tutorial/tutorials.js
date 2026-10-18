@@ -14,7 +14,7 @@ export const TOURS = [
       {
         route: '/',
         highlight: '[data-tt="landing-cta"]',
-        text: 'Welcome to Super Toto Local. This is the landing page. Use Get started to enter the app, or log in if you already have an account.',
+        text: 'Welcome to Super Toto Local. This is the landing page. Use Book a Ride to get started, sign up free, or log in if you already have an account.',
       },
       {
         route: '/',
@@ -36,7 +36,7 @@ export const TOURS = [
       {
         route: '/login',
         highlight: '.auth-card',
-        text: 'You can try the demo rider account: rider at supertoto dot local, with the password shown on the built-in demo card. That is the end of the welcome tour.',
+        text: 'Tip: open the Log in menu on the landing page and pick Riders, Drivers, Fleet Owner or Admin to enter that account instantly. That is the end of the welcome tour.',
         wait: 1600,
       },
     ],

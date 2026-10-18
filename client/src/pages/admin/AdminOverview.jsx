@@ -1,14 +1,33 @@
 import { useEffect, useState } from 'react';
 import client from '../../api/client.js';
-import { apiBase } from '../../api/config.js';
 import { formatINR } from '../../utils/geo.js';
 
 export default function AdminOverview() {
   const [stats, setStats] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     client.get('/admin/stats').then(({ data }) => setStats(data.stats)).catch(() => {});
   }, []);
+
+  const exportUsers = async () => {
+    setBusy(true);
+    try {
+      const res = await client.get('/admin/export/users', { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `supertoto_users_${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (!stats) return <div className="page-loader">Loading…</div>;
 
@@ -21,9 +40,9 @@ export default function AdminOverview() {
             Platform activity at a glance. Admin-only area — riders and drivers can never reach it.
           </p>
         </div>
-        <a href={`${apiBase()}/admin/export/users`} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ whiteSpace: 'nowrap' }}>
-          📥 Export Users (CSV)
-        </a>
+        <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} disabled={busy} onClick={exportUsers}>
+          {busy ? 'Preparing…' : '📥 Export Users (CSV)'}
+        </button>
       </div>
 
       <h3 style={{ margin: '0 0 12px' }}>Users &amp; rides</h3>

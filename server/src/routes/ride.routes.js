@@ -6,9 +6,11 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import {
   haversineKm,
   estimate,
+  computeFare,
   computeSharedFare,
   computeSurge,
   computeLuggageCharge,
+  computePassengers,
   isAmbulanceVehicle,
   VEHICLE_TYPES,
 } from '../utils/pricing.js';
@@ -55,7 +57,7 @@ async function surgeContext() {
 // - Off: whole-trip (1 passenger) billing, no seat booking.
 // Ambulance trips are always whole-trip (patient + attendant), never shared, and
 // emergency calls never attract surge.
-async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode, mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup }) {
+async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode, mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup, adults, children }) {
   const luggageCount = Number(luggage?.count) || 0;
   const luggageHeavyCount = Number(luggage?.heavyCount) || 0;
   // Road distance from OSRM (falls back to haversine when unreachable); the
@@ -106,6 +108,18 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   const seatCount = seatsEnabled ? nominalSeats : 1;
   const requested = Math.max(1, Math.round(Number(seats) || 1));
   const bookedSeats = !seatsEnabled ? 1 : reserved ? seatCount : Math.min(requested, seatCount);
+  // Declared passenger mix (adults + children). When the rider doesn't state a
+  // breakdown we keep the previous behaviour (adults = booked seats, no children).
+  // Children under the free limit (cfg.freeChildCount) ride free; extra children
+  // are charged at the adult rate.
+  const declaredAdults = adults === undefined || adults === null || adults === '' ? null : Number(adults);
+  const declaredChildren = children === undefined || children === null || children === '' ? null : Number(children);
+  const baseAdults = Number.isFinite(declaredAdults) ? declaredAdults : !seatsEnabled ? 1 : bookedSeats;
+  const baseChildren = Number.isFinite(declaredChildren) ? declaredChildren : 0;
+  const pax = computePassengers(baseAdults, baseChildren, cfg);
+  // Seats physically occupied vs. seats billed (free children still occupy a seat
+  // but are not charged).
+  const chargedSeats = !seatsEnabled ? pax.chargedPassengers : Math.min(pax.chargedPassengers, seatCount);
   const { activeRequests, onlineDrivers } = await surgeContext();
   const { durationMin } = estimate(distanceKm, cfg);
   // Prefer real road duration when the router answered; otherwise derive a
@@ -128,7 +142,14 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   if (isAmbulance && ambulanceCfg?.maxRideDistanceKm) cfg.maxRideDistanceKm = ambulanceCfg.maxRideDistanceKm;
   const luggageCharge = computeLuggageCharge(luggageCount, luggageHeavyCount, cfg);
   const { tripFare, perSeatFare } = computeSharedFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, seatCount);
-  const riderFare = reserved ? tripFare.total : perSeatFare * bookedSeats;
+  // Reserved: whole vehicle at the full trip fare. Shared: per-seat x charged
+  // seats (free children discounted). Off: whole-trip fare scaled per charged
+  // passenger, matching the existing per-passenger base rule.
+  const riderFare = reserved
+    ? tripFare.total
+    : seatsEnabled
+      ? perSeatFare * chargedSeats
+      : computeFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, pax.chargedPassengers).total;
   const effectiveGst = { ...tripFare };
   if (effectiveGst.taxableValue === undefined) effectiveGst.taxableValue = effectiveGst.gross;
   return {
@@ -145,6 +166,7 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
     seatCount,
     bookedSeats,
     riderFare,
+    passengers: pax,
     seatsEnabled,
     seatMode,
     reserved,
@@ -186,11 +208,11 @@ export default function rideRoutes(io) {
 
   router.post('/estimate', async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state, promo, category, ambulanceType, emergency, patientConsent, waitingAtPickup } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo, category, ambulanceType, emergency, patientConsent, waitingAtPickup, adults, children } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup, adults, children });
 
       let promoInfo = null;
       if (promo) {
@@ -224,6 +246,8 @@ export default function rideRoutes(io) {
         perSeatFare: c.perSeatFare,
         seatCount: c.seatCount,
         seats: c.bookedSeats,
+        passengers: c.passengers,
+        freeChildCount: c.cfg.freeChildCount ?? 2,
         riderTotal: Math.max(0, c.riderFare - discount),
         riderTotalBeforePromo: c.riderFare,
         promoDiscount: discount,
@@ -255,7 +279,7 @@ export default function rideRoutes(io) {
   // Rider requests a toto (books seats on a shared trip)
   router.post('/', requireRole('rider'), async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state, promo, category, ambulanceType, emergency, patientConsent, waitingAtPickup } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo, category, ambulanceType, emergency, patientConsent, waitingAtPickup, adults, children, language } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
@@ -264,7 +288,7 @@ export default function rideRoutes(io) {
         return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
       }
 
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup, adults, children });
       if (!c.seatsEnabled && c.requestedSeats > 1) {
         return res.status(400).json({ message: 'Seat booking is currently disabled by the operator. Rides are booked for the whole trip (1 passenger).' });
       }
@@ -315,13 +339,14 @@ export default function rideRoutes(io) {
         },
         luggage: { count: c.luggageCount, heavyCount: c.luggageHeavyCount, charge: c.luggageCharge },
         passengers: {
-          adults: c.bookedSeats,
-          children: 0,
-          freeChildren: 0,
-          paidChildren: 0,
-          totalPassengers: c.bookedSeats,
-          chargedPassengers: c.bookedSeats,
+          adults: c.passengers.adults,
+          children: c.passengers.children,
+          freeChildren: c.passengers.freeChildren,
+          paidChildren: c.passengers.paidChildren,
+          totalPassengers: c.passengers.totalPassengers,
+          chargedPassengers: c.passengers.chargedPassengers,
         },
+        language: String(language || 'en').trim().toLowerCase().slice(0, 5) || 'en',
         fare: payable,
         fareBreakup: { ...c.tripFare, tripTotal: c.tripFare.total, perSeatFare: c.perSeatFare, seatMode: c.seatMode, promoDiscount: discount },
         promo: discount > 0 ? { code: redeemed.promo.code, description: redeemed.promo.description, discount, appliedAt: new Date() } : undefined,
@@ -350,7 +375,7 @@ export default function rideRoutes(io) {
   // Rider reserves seats on a shared trip (no dispatch)
   router.post('/reserve', requireRole('rider'), async (req, res, next) => {
     try {
-      const { pickup, drop, luggage, seats, vehicleType, state, promo } = req.body;
+      const { pickup, drop, luggage, seats, vehicleType, state, promo, adults, children, language } = req.body;
       if (!pickup?.lat || !pickup?.lng || !drop?.lat || !drop?.lng) {
         return res.status(400).json({ message: 'Pickup and drop locations are required' });
       }
@@ -359,7 +384,7 @@ export default function rideRoutes(io) {
         return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
       }
 
-      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode });
+      const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, adults, children });
       if (!c.seatsEnabled && c.requestedSeats > 1) {
         return res.status(400).json({ message: 'Seat booking is currently disabled by the operator. Rides are booked for the whole trip (1 passenger).' });
       }
@@ -399,13 +424,14 @@ export default function rideRoutes(io) {
         },
         luggage: { count: c.luggageCount, heavyCount: c.luggageHeavyCount, charge: c.luggageCharge },
         passengers: {
-          adults: c.bookedSeats,
-          children: 0,
-          freeChildren: 0,
-          paidChildren: 0,
-          totalPassengers: c.bookedSeats,
-          chargedPassengers: c.bookedSeats,
+          adults: c.passengers.adults,
+          children: c.passengers.children,
+          freeChildren: c.passengers.freeChildren,
+          paidChildren: c.passengers.paidChildren,
+          totalPassengers: c.passengers.totalPassengers,
+          chargedPassengers: c.passengers.chargedPassengers,
         },
+        language: String(language || 'en').trim().toLowerCase().slice(0, 5) || 'en',
         fare: payable,
         fareBreakup: { ...c.tripFare, tripTotal: c.tripFare.total, perSeatFare: c.perSeatFare, seatMode: c.seatMode, promoDiscount: discount },
         promo: discount > 0 ? { code: redeemed.promo.code, description: redeemed.promo.description, discount, appliedAt: new Date() } : undefined,
@@ -664,7 +690,7 @@ export default function rideRoutes(io) {
       if (String(ride.rider) !== String(req.user.id)) {
         return res.status(403).json({ message: 'Not your ride' });
       }
-      if (!['reserved', 'requested', 'assigned'].includes(ride.status)) {
+      if (!['reserved', 'requested', 'assigned', 'no_driver'].includes(ride.status)) {
         return res.status(400).json({ message: `Cannot cancel a ride that is ${ride.status}` });
       }
 

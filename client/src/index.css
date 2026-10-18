@@ -433,8 +433,63 @@ tr:hover td { background: #fafbfd; }
 .hero-chip { font-size: 15px; padding: 8px 16px; }
 .hero h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.08; margin: 16px 0 14px; letter-spacing: -0.02em; }
 .hero h1 .accent { color: var(--brand); }
+.hero h1 .brand-green { color: #008000; }
 .hero p { color: var(--muted); font-size: 18px; max-width: 640px; margin: 0 auto 24px; }
 .hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* Landing quick-login dropdown */
+.login-menu-wrap { position: relative; display: inline-block; }
+.login-menu-wrap .caret { font-size: 11px; opacity: 0.75; margin-left: 2px; }
+.login-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 250px;
+  background: #fff;
+  border: 1px solid #e4e7ec;
+  border-radius: 12px;
+  box-shadow: 0 14px 34px rgba(16, 24, 40, 0.16);
+  padding: 6px;
+  z-index: 60;
+  text-align: left;
+}
+.login-menu-head {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #667085;
+  padding: 8px 10px 4px;
+}
+.login-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: #101828;
+  text-decoration: none;
+}
+.login-menu-item:hover:not(:disabled) { background: #f2f4f7; }
+.login-menu-item:disabled { opacity: 0.6; cursor: default; }
+.login-menu-link { border-bottom: 1px solid #f2f4f7; border-radius: 8px 8px 0 0; margin-bottom: 2px; }
+.login-menu-name { font-weight: 600; font-size: 14px; }
+.login-menu-sub { font-size: 12px; color: #667085; }
+.login-menu-error { margin: 4px 8px; padding: 6px 8px; border-radius: 8px; background: #fef3f2; color: #b42318; font-size: 12px; }
+.login-menu-group { display: flex; flex-direction: column; }
+.login-menu-role .login-menu-sub { display: flex; align-items: center; gap: 6px; }
+.login-menu-caret { transition: transform 0.15s ease; }
+.login-menu-role.open .login-menu-caret { transform: rotate(180deg); }
+.login-menu-user { padding-left: 20px; }
+.login-menu-user .login-menu-name { font-weight: 500; font-size: 13px; }
 
 /* Urgency / ambulance strip */
 .emergency-strip {
@@ -597,6 +652,18 @@ tr:hover td { background: #fafbfd; }
   border-radius: 9px;
   object-fit: cover;
 }
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--brand);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.link-btn:disabled { opacity: 0.6; cursor: default; }
+.auth-divider { height: 1px; background: var(--line); margin: 16px 0 12px; }
 .hero .hero-logo {
   width: 84px;
   height: 84px;

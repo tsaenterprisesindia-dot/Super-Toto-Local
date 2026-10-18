@@ -5,7 +5,7 @@ import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import { Server } from 'socket.io';
-import { connectDB } from './config/db.js';
+import { connectDB, stopDB } from './config/db.js';
 import routes from './routes/index.js';
 import { setupSocket } from './socket.js';
 import { notFound, errorHandler } from './middleware/error.js';
@@ -22,7 +22,10 @@ const io = new Server(server, { cors: { origin: true, credentials: true } });
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// NOTE: uploaded documents (Aadhaar, RC, license, etc.) are deliberately NOT served
+// as public static files. They are streamed only through authenticated endpoints
+// (/admin/drivers/:id/documents/:docId/download, /driver/documents/:docId/download,
+// /rider/documents/:docId/download) so personal documents can't be fetched by URL.
 app.use('/api', routes(io));
 
 // In production the backend also serves the built React app, so the whole app
@@ -49,7 +52,9 @@ app.use(errorHandler);
 
 setupSocket(io);
 
-const PORT = process.env.PORT || 5000;
+// Super Toto Local listens on 5001 by default so it can run side-by-side with
+// TriVista GST ERP (which uses 5000) on the same machine. Override with PORT.
+const PORT = process.env.PORT || 5001;
 
 // Security gate: never allow a production start with the default JWT secret, or
 // anyone could forge auth tokens. Local dev keeps the fallback with a warning.
@@ -89,7 +94,27 @@ async function start() {
   dailyTimer.unref();
 }
 
+// Graceful shutdown so the bundled MongoDB flushes to disk cleanly before the
+// process exits (important now that data is stored on disk).
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n[server] ${signal} received, shutting down...`);
+  try { io.close(); } catch {}
+  server.close();
+  try {
+    await stopDB();
+  } catch (err) {
+    console.error('[server] shutdown error:', err.message);
+  }
+  process.exit(0);
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
 start().catch((err) => {
   console.error('[server] failed to start:', err);
   process.exit(1);
 });
+

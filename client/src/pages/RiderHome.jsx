@@ -9,6 +9,7 @@ import RideTracker from '../components/RideTracker.jsx';
 import SafetyTips from '../components/SafetyTips.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import { DESTINATIONS, formatINR } from '../utils/geo.js';
+import { LOCALES } from '../i18n.js';
 
 const ACTIVE_STATUSES = ['reserved', 'requested', 'assigned', 'driver_arrived', 'in_progress'];
 const VEHICLE_OPTIONS = [
@@ -18,6 +19,7 @@ const VEHICLE_OPTIONS = [
   { id: 'bike', label: '🏍 Bike Taxi', tag: 'Budget' },
 ];
 const DEFAULT_SEATS = { toto: 4, auto: 3, taxi: 4, bike: 1 };
+const LANGUAGE_NAMES = { en: 'English', hi: 'हिन्दी', bn: 'বাংলা', mr: 'मराठी', te: 'తెలుగు', ta: 'தமிழ்' };
 
 function SeatMap({ seatCount, taken = 0, mySeats = 0, reserved = false }) {
   const { t } = useTranslation();
@@ -44,7 +46,7 @@ function SeatMap({ seatCount, taken = 0, mySeats = 0, reserved = false }) {
 
 export default function RiderHome() {
   const { socket } = useSocket();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [ride, setRide] = useState(null);
   const [driverPos, setDriverPos] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +59,15 @@ export default function RiderHome() {
   const [err, setErr] = useState('');
   const [notice, setNotice] = useState('');
   const [luggageCount, setLuggageCount] = useState(0);
-  const [seats, setSeats] = useState(1);
+  const [adults, setAdults] = useState(1);
+  const [children, setChildren] = useState(0);
+  const [language, setLanguage] = useState(() => {
+    try {
+      const saved = localStorage.getItem('btl_lang');
+      if (saved) return saved;
+    } catch { /* ignore */ }
+    return (i18n.language || 'en').split('-')[0];
+  });
   const [vehicleType, setVehicleType] = useState('toto');
   const [fstate, setFstate] = useState('');
   const [stateList, setStateList] = useState([]);
@@ -91,6 +101,13 @@ export default function RiderHome() {
   const seatsEnabled = seatMode !== 'off';
   const reservedSeats = bookMode === 'reserved';
   const maxSeats = estimate?.seatCount || DEFAULT_SEATS[vehicleType] || 4;
+  const freeChildCount = estimate?.freeChildCount ?? 2;
+  // Travellers = adults + children. On a seat-enabled trip this is the number of
+  // seats booked; free children occupy a seat but are not charged.
+  const travellers = Math.max(1, (Number(adults) || 0) + (Number(children) || 0));
+  const seats = seatsEnabled ? Math.min(maxSeats, travellers) : 1;
+  const setAdultsClamped = (v) => setAdults(Math.max(1, Math.min(maxSeats, v)));
+  const setChildrenClamped = (v) => setChildren(Math.max(0, Math.min(Math.max(0, maxSeats - adults), v)));
 
   // Ambulance trips are whole-trip service calls: the level comes from the
   // vehicle type, and only when the pickup resolves to an enabled state the
@@ -144,10 +161,6 @@ export default function RiderHome() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!seatsEnabled || reservedSeats) setSeats(1);
-  }, [seatsEnabled, reservedSeats]);
-
   const refreshActive = useCallback(async () => {
     try {
       const { data } = await client.get('/rides/mine');
@@ -197,14 +210,17 @@ export default function RiderHome() {
       if (!ACTIVE_STATUSES.includes(r.status)) setDriverPos(null);
     };
     const onLoc = (pos) => setDriverPos(pos);
+    const onShared = () => { refreshShared(); };
 
     socket.on('ride:updated', onUpdate);
     socket.on('ride:driver_location', onLoc);
+    socket.on('shared:updated', onShared);
     return () => {
       socket.off('ride:updated', onUpdate);
       socket.off('ride:driver_location', onLoc);
+      socket.off('shared:updated', onShared);
     };
-  }, [socket, currentUserId]);
+  }, [socket, currentUserId, refreshShared]);
 
   useEffect(() => {
     if (!pickup || !drop) {
@@ -212,7 +228,7 @@ export default function RiderHome() {
       return;
     }
     let alive = true;
-    const body = { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode };
+    const body = { pickup, drop, luggage: { count: luggageCount }, seats, adults, children, language, vehicleType, state: fstate, promo, mode: bookMode };
     if (isAmbulance) {
       Object.assign(body, { category: 'ambulance', ambulanceType: ambulanceLevel, emergency, patientConsent, waitingAtPickup });
     }
@@ -222,17 +238,17 @@ export default function RiderHome() {
         if (!alive) return;
         setEstimate(data);
         setPromoInfo(data.promo);
-        if (data.seatCount) setSeats((s) => Math.min(s, data.seatCount));
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
-  }, [pickup, drop, luggageCount, seats, vehicleType, fstate, promo, bookMode, isAmbulance, ambulanceLevel, emergency, patientConsent, waitingAtPickup]);
+  }, [pickup, drop, luggageCount, seats, adults, children, vehicleType, fstate, promo, bookMode, isAmbulance, ambulanceLevel, emergency, patientConsent, waitingAtPickup]);
 
-  // Re-clamp the seat count when the vehicle type / capacity changes
+  // Re-clamp the traveller counts when the vehicle type / capacity changes
   useEffect(() => {
-    setSeats((s) => Math.min(Math.max(1, s), maxSeats));
+    setAdults((a) => Math.min(Math.max(1, a), maxSeats));
+    setChildren((c) => Math.min(Math.max(0, c), Math.max(0, maxSeats - 1)));
   }, [maxSeats]);
 
   useEffect(() => {
@@ -265,7 +281,7 @@ export default function RiderHome() {
     setBusy(true);
     setErr('');
     try {
-      const body = { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode };
+      const body = { pickup, drop, luggage: { count: luggageCount }, seats, adults, children, language, vehicleType, state: fstate, promo, mode: bookMode };
       if (isAmbulance) Object.assign(body, { category: 'ambulance', ambulanceType: ambulanceLevel, emergency, patientConsent, waitingAtPickup });
       const { data } = await client.post('/rides', body);
       setRide(data.ride);
@@ -282,7 +298,7 @@ export default function RiderHome() {
     setBusy(true);
     setErr('');
     try {
-      const { data } = await client.post('/rides/reserve', { pickup, drop, luggage: { count: luggageCount }, seats, vehicleType, state: fstate, promo, mode: bookMode });
+      const { data } = await client.post('/rides/reserve', { pickup, drop, luggage: { count: luggageCount }, seats, adults, children, language, vehicleType, state: fstate, promo, mode: bookMode });
       setRide(data.ride);
     } catch (e) {
       setErr(e.response?.data?.message || t('riderhome.reserveError') || 'Could not reserve a ride');
@@ -336,6 +352,7 @@ export default function RiderHome() {
       setNotice(`✅ ${data.message || t('riderhome.seatBooked', { driver: r.driver?.name || '' })}`);
     } catch (e) {
       setErr(e.response?.data?.message || t('riderhome.seatBookedError') || 'Could not book a seat');
+      refreshShared();
     } finally {
       setJoiningId(null);
     }
@@ -595,52 +612,68 @@ export default function RiderHome() {
 
                   {!isAmbulance && (
                     <div className="field">
-                    {reservedSeats ? (
-                      <label>{t('riderhome.seatsAvailable', { count: maxSeats })}</label>
-                    ) : seatsEnabled ? (
-                      <label>{t('riderhome.seatsToBook', { booked: Math.min(seats, maxSeats), max: maxSeats })}</label>
-                    ) : (
-                      <label>{t('riderhome.passengers')}</label>
-                    )}
-                    <div className="row" style={{ gap: 6, alignItems: 'center' }}>
-                      {reservedSeats ? (
-                        <>
-                          <SeatMap seatCount={maxSeats} reserved />
-                          <span className="small muted" style={{ marginLeft: 'auto' }}>
-                            <b>{t('riderhome.wholeVehicle')}</b>
-                          </span>
-                        </>
-                      ) : seatsEnabled ? (
-                        <>
-                          <button type="button" className="btn btn-ghost small" onClick={() => setSeats((s) => Math.max(1, s - 1))} disabled={seats <= 1 || !seatsEnabled}>−</button>
-                          <span style={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{seats}</span>
-                          <button type="button" className="btn btn-ghost small" onClick={() => setSeats((s) => Math.min(maxSeats, s + 1))} disabled={seats >= maxSeats || !seatsEnabled}>+</button>
-                          <span className="small muted" style={{ marginLeft: 4 }}>
-                            {estimate?.perSeatFare && seatsEnabled ? t('riderhome.perSeat', { fare: formatINR(estimate.perSeatFare) }) : ''}
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
-                    {seatsEnabled && !reservedSeats && (
-                      <div className="seatmap-wrap">
-                        <span className="small muted">{t('riderhome.seatAvailability')}</span>
-                        <SeatMap seatCount={maxSeats} taken={estimate?.seats || 0} mySeats={seats} />
-                        <span className="small muted">{t('riderhome.seatLegend')}</span>
+                      <label>{t('riderhome.travellers')}</label>
+                      <div className="spread" style={{ marginTop: 4 }}>
+                        <span className="small">{t('riderhome.adults')}</span>
+                        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                          <button type="button" className="btn btn-ghost small" onClick={() => setAdultsClamped(adults - 1)} disabled={adults <= 1}>−</button>
+                          <span style={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{adults}</span>
+                          <button type="button" className="btn btn-ghost small" onClick={() => setAdultsClamped(adults + 1)} disabled={adults >= maxSeats}>+</button>
+                        </div>
                       </div>
-                    )}
-                    <div
-                      className="small muted"
-                      style={{ marginTop: 4 }}
-                    >
-                      {reservedSeats
-                        ? t('riderhome.seatNoteReserved')
-                        : seatsEnabled
-                          ? t('riderhome.seatNoteShared')
-                          : seatCfg.message
-                            ? String(seatCfg.message)
-                            : t('riderhome.seatNoteOff')}
+                      <div className="spread" style={{ marginTop: 6 }}>
+                        <span className="small">{t('riderhome.children')}</span>
+                        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                          <button type="button" className="btn btn-ghost small" onClick={() => setChildrenClamped(children - 1)} disabled={children <= 0}>−</button>
+                          <span style={{ minWidth: 28, textAlign: 'center', fontWeight: 700 }}>{children}</span>
+                          <button type="button" className="btn btn-ghost small" onClick={() => setChildrenClamped(children + 1)} disabled={children >= Math.max(0, maxSeats - adults)}>+</button>
+                        </div>
+                      </div>
+                      <div className="small muted" style={{ marginTop: 4 }}>
+                        {t('riderhome.childrenHint', { count: freeChildCount })}
+                      </div>
+                      <div className="spread" style={{ marginTop: 8 }}>
+                        <span className="small muted">
+                          {seatsEnabled ? t('riderhome.seatsToBook', { booked: seats, max: maxSeats }) : t('riderhome.passengers')}
+                        </span>
+                        {estimate?.perSeatFare && seatsEnabled && !reservedSeats ? (
+                          <span className="small muted">{t('riderhome.perSeat', { fare: formatINR(estimate.perSeatFare) })}</span>
+                        ) : null}
+                      </div>
+                      {seatsEnabled && !reservedSeats && (
+                        <div className="seatmap-wrap">
+                          <span className="small muted">{t('riderhome.seatAvailability')}</span>
+                          <SeatMap seatCount={maxSeats} taken={estimate?.seats || 0} mySeats={seats} />
+                          <span className="small muted">{t('riderhome.seatLegend')}</span>
+                        </div>
+                      )}
+                      {reservedSeats && (
+                        <div className="seatmap-wrap">
+                          <SeatMap seatCount={maxSeats} reserved />
+                        </div>
+                      )}
+                      <div className="small muted" style={{ marginTop: 4 }}>
+                        {reservedSeats
+                          ? t('riderhome.seatNoteReserved')
+                          : seatsEnabled
+                            ? t('riderhome.seatNoteShared')
+                            : seatCfg.message
+                              ? String(seatCfg.message)
+                              : t('riderhome.seatNoteOff')}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {!isAmbulance && (
+                    <div className="field">
+                      <label>{t('riderhome.language')}</label>
+                      <select className="input" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                        {LOCALES.map((l) => (
+                          <option key={l} value={l}>{LANGUAGE_NAMES[l] || l}</option>
+                        ))}
+                      </select>
+                      <div className="small muted" style={{ marginTop: 4 }}>{t('riderhome.languageHint')}</div>
+                    </div>
                   )}
 
                   {!isAmbulance && (

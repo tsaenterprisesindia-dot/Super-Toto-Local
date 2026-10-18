@@ -46,6 +46,8 @@ const rideSchema = new mongoose.Schema(
       totalPassengers: { type: Number, default: 1 },
       chargedPassengers: { type: Number, default: 1 },
     },
+    // Rider's preferred language for communication with the driver (declared at booking).
+    language: { type: String, default: 'en' },
     fare: { type: Number, default: 0 }, // total charged to the rider (incl. GST)
     fareBreakup: {
       base: { type: Number, default: 0 },

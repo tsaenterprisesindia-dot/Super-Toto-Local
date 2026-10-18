@@ -50,11 +50,12 @@ export default function Register() {
   const [searchParams] = useSearchParams();
 
   const roleParam = searchParams.get('role');
+  const phoneParam = searchParams.get('phone') || '';
   const [role, setRole] = useState(roleParam === 'driver' ? 'driver' : roleParam === 'fleet' || roleParam === 'fleet_owner' ? 'fleet_owner' : 'rider');
   const [form, setForm] = useState({
     name: '',
     email: '',
-    phone: '',
+    phone: phoneParam,
     password: '',
     confirmPassword: '',
     aadhaarNumber: '',
@@ -129,11 +130,8 @@ export default function Register() {
       return;
     }
     try {
-      const { user } = await register({ ...form, role, otp, privacyConsent: true });
-      if (user.role === 'admin') navigate('/admin');
-      else if (user.role === 'driver') navigate('/driver/documents');
-      else if (user.role === 'fleet_owner') navigate('/fleet');
-      else navigate('/ride');
+      await register({ ...form, role, otp, privacyConsent: true });
+      navigate('/', { replace: true });
     } catch (err) {
       setErr(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? 'Cannot reach server. Make sure the server is running.' : 'Registration failed'));
     }

@@ -1,4 +1,4 @@
-﻿import { Routes, Route, Navigate } from 'react-router-dom';
+﻿import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import ChatBot from './components/ChatBot.jsx';
 import Landing from './pages/Landing.jsx';
@@ -41,6 +41,7 @@ import AdminVehicleRates from './pages/admin/AdminVehicleRates.jsx';
 import AdminAds from './pages/admin/AdminAds.jsx';
 import AdminSafetyTips from './pages/admin/AdminSafetyTips.jsx';
 import AdminCAExports from './pages/admin/AdminCAExports.jsx';
+import AdminGSTFiling from './pages/admin/AdminGSTFiling.jsx';
 import AdminBikeTaxi from './pages/admin/AdminBikeTaxi.jsx';
 import AdminFeedback from './pages/admin/AdminFeedback.jsx';
 import AdminCompliance from './pages/admin/AdminCompliance.jsx';
@@ -53,8 +54,12 @@ import AdminStateFares from './pages/admin/AdminStateFares.jsx';
 
 function Protected({ children, roles }) {
   const { user, loading } = useAuth();
+  const location = useLocation();
   if (loading) return <div className="page-loader">Loadingâ€¦</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    const next = encodeURIComponent(location.pathname + location.search);
+    return <Navigate to={`/login?next=${next}`} replace />;
+  }
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : user.role === 'fleet_owner' ? '/fleet' : '/'} replace />;
   }
@@ -217,7 +222,8 @@ export default function App() {
         <Route path="vehicle-rates" element={<AdminVehicleRates />} />
         <Route path="ads" element={<AdminAds />} />
         <Route path="safety-tips" element={<AdminSafetyTips />} />
-            <Route path="ca-exports" element={<ProtectedRoute role="admin"><AdminCAExports /></ProtectedRoute>} />
+        <Route path="ca-exports" element={<AdminCAExports />} />
+        <Route path="gst-filing" element={<AdminGSTFiling />} />
         <Route path="bike-taxi" element={<AdminBikeTaxi />} />
         <Route path="feedback" element={<AdminFeedback />} />
         <Route path="compliance" element={<AdminCompliance />} />

@@ -30,6 +30,11 @@ const PASSWORDS = {
   fleet: 'Fleet@Toto2k26',
 };
 
+// Demo compliance documents must always be valid *relative to now* - the
+// ambulance expiry sweep suspends any active record whose documents have lapsed,
+// so hard-coded dates would silently rot the demo as the calendar moves on.
+const inDays = (n) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
+
 function buildRideData({ rider, driver, pickupIdx, dropIdx, daysAgo, paid = true, rated = true, method = 'UPI' }) {
   const pickup = DESTINATIONS[pickupIdx];
   const drop = DESTINATIONS[dropIdx];
@@ -170,6 +175,7 @@ async function seedDatabase() {
     phone: '9000000010',
     password: fleetPw,
     role: 'fleet_owner',
+    fleetStatus: 'approved',
     termsAcceptedAt: new Date(),
     termsVersion: '1.0',
     privacyConsentAt: new Date(),
@@ -221,13 +227,13 @@ async function seedDatabase() {
     stateCode: 'SK',
     ambulanceType: 'BLS',
     vehicleNumber: 'SK-01-E2450',
-    permit: { number: 'STA-PMT-2026-114', issuer: 'State Transport Authority, Sikkim', validUpto: new Date('2027-12-31') },
-    fitness: { number: 'FIT-2026-0458', issuer: 'Sikkim Motor Vehicles Dept', validUpto: new Date('2026-12-31') },
-    insurance: { number: 'POL-99213', issuer: 'National Insurance Co', validUpto: new Date('2027-06-30') },
-    roadTax: { number: 'RT-SK-2450', issuer: 'Sikkim Transport Dept', validUpto: new Date('2027-03-31') },
-    puc: { number: 'PUC-88231', issuer: 'Sikkim PUC Centre', validUpto: new Date('2026-10-15') },
-    drivingLicense: { number: 'SK02-2014-87654', issuer: 'RTO Gangtok', validUpto: new Date('2033-01-01') },
-    emtCert: { number: 'EMT-B-5521', issuer: 'NSSM / National Ambulance Code', validUpto: new Date('2027-11-30') },
+    permit: { number: 'STA-PMT-2026-114', issuer: 'State Transport Authority, Sikkim', validUpto: inDays(730) },
+    fitness: { number: 'FIT-2026-0458', issuer: 'Sikkim Motor Vehicles Dept', validUpto: inDays(365) },
+    insurance: { number: 'POL-99213', issuer: 'National Insurance Co', validUpto: inDays(540) },
+    roadTax: { number: 'RT-SK-2450', issuer: 'Sikkim Transport Dept', validUpto: inDays(420) },
+    puc: { number: 'PUC-88231', issuer: 'Sikkim PUC Centre', validUpto: inDays(180) },
+    drivingLicense: { number: 'SK02-2014-87654', issuer: 'RTO Gangtok', validUpto: inDays(2500) },
+    emtCert: { number: 'EMT-B-5521', issuer: 'NSSM / National Ambulance Code', validUpto: inDays(700) },
     equipmentList: 'Stretcher/cot, oxygen cylinder, suction unit, splints, first-aid kit, AED',
     status: 'active',
     reviewedAt: new Date(),
@@ -238,13 +244,13 @@ async function seedDatabase() {
     stateCode: 'BR',
     ambulanceType: 'BLS',
     vehicleNumber: 'BR-01-E2450',
-    permit: { number: 'BR-PMT-2026-0912', issuer: 'State Transport Authority, Bihar', validUpto: new Date('2027-12-31') },
-    fitness: { number: 'FIT-2026-0771', issuer: 'Bihar Motor Vehicles Dept', validUpto: new Date('2026-12-31') },
-    insurance: { number: 'POL-99144', issuer: 'National Insurance Co', validUpto: new Date('2027-06-30') },
-    roadTax: { number: 'RT-BR-2450', issuer: 'Bihar Transport Dept', validUpto: new Date('2027-03-31') },
-    puc: { number: 'PUC-66012', issuer: 'Bihar PUC Centre', validUpto: new Date('2026-10-15') },
-    drivingLicense: { number: 'BR02-2014-33110', issuer: 'RTO Katihar', validUpto: new Date('2033-01-01') },
-    emtCert: { number: 'EMT-B-5521', issuer: 'NSSM / National Ambulance Code', validUpto: new Date('2027-11-30') },
+    permit: { number: 'BR-PMT-2026-0912', issuer: 'State Transport Authority, Bihar', validUpto: inDays(730) },
+    fitness: { number: 'FIT-2026-0771', issuer: 'Bihar Motor Vehicles Dept', validUpto: inDays(365) },
+    insurance: { number: 'POL-99144', issuer: 'National Insurance Co', validUpto: inDays(540) },
+    roadTax: { number: 'RT-BR-2450', issuer: 'Bihar Transport Dept', validUpto: inDays(420) },
+    puc: { number: 'PUC-66012', issuer: 'Bihar PUC Centre', validUpto: inDays(180) },
+    drivingLicense: { number: 'BR02-2014-33110', issuer: 'RTO Katihar', validUpto: inDays(2500) },
+    emtCert: { number: 'EMT-B-5521', issuer: 'NSSM / National Ambulance Code', validUpto: inDays(700) },
     equipmentList: 'Stretcher/cot, oxygen cylinder, suction unit, splints, first-aid kit, AED',
     status: 'active',
     reviewedAt: new Date(),
@@ -293,6 +299,7 @@ export async function ensureDemoFleetOwner() {
     phone: '9000000010',
     password: fleetPw,
     role: 'fleet_owner',
+    fleetStatus: 'approved',
     termsAcceptedAt: new Date(),
     termsVersion: '1.0',
     privacyConsentAt: new Date(),

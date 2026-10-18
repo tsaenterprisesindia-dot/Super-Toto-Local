@@ -102,6 +102,26 @@ export default function riderRoutes(io) {
     }
   });
 
+  // Stream the rider's own uploaded document (authenticated; the public /uploads
+  // static path is disabled so docs can only be read by their owner or an admin).
+  router.get('/documents/:docId/download', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.user.id).select('documents');
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      const doc = user.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: 'Document not found' });
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on disk' });
+      const ext = path.extname(doc.filename).toLowerCase();
+      const mimeTypes = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+      res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${doc.originalName || doc.filename}"`);
+      fs.createReadStream(filePath).pipe(res);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // Rider wallet — prepaid balance used to pay for trips
   router.get('/wallet', async (req, res, next) => {
     try {

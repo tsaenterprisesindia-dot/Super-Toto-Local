@@ -15,7 +15,6 @@ import { addCashCollection, settleCashDue, cashStatus, maybeSendCashReminder, pl
 import { notifyUser } from '../services/notify.js';
 import Invoice from '../models/Invoice.js';
 import { getGstConfig } from '../services/settings.js';
-import { stateCode } from '../utils/pricing.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -597,6 +596,26 @@ export default function driverRoutes(io) {
         aadhaarNumber: user.aadhaarNumber || '',
         phoneVerified: user.phoneVerified || false,
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Stream one of the driver's own uploaded documents (authenticated; the public
+  // /uploads static path is disabled so docs can only be read by their owner or an admin).
+  router.get('/documents/:docId/download', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.user.id).select('documents');
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      const doc = user.documents.id(req.params.docId);
+      if (!doc) return res.status(404).json({ message: 'Document not found' });
+      const filePath = path.join(uploadsDir, doc.filename);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'File not found on disk' });
+      const ext = path.extname(doc.filename).toLowerCase();
+      const mimeTypes = { '.pdf': 'application/pdf', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
+      res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+      res.setHeader('Content-Disposition', `inline; filename="${doc.originalName || doc.filename}"`);
+      fs.createReadStream(filePath).pipe(res);
     } catch (err) {
       next(err);
     }

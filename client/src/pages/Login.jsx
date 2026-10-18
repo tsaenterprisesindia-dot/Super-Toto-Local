@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -8,64 +8,107 @@ import OtpInput from '../components/OtpInput.jsx';
 import OtpTimer from '../components/OtpTimer.jsx';
 import logo from '../assets/super-toto-logo.png';
 
-const ROLES = [
-  { key: 'rider' },
-  { key: 'driver' },
-  { key: 'admin' },
-];
+const ROLE_ORDER = ['rider', 'driver', 'fleet_owner', 'admin'];
+const ROLE_LABELS = { rider: 'Riders', driver: 'Drivers', fleet_owner: 'Fleet Owner', admin: 'Admin' };
 
-const ROLE_T = {
-  rider: 'login.roleRider',
-  driver: 'login.roleDriver',
-  admin: 'login.roleAdmin',
-};
+// Reduce any typed number to a bare 10-digit Indian mobile (or '' if invalid).
+function normalizePhoneInput(raw) {
+  let d = (raw || '').replace(/[\s\-()]/g, '');
+  if (d.startsWith('+91')) d = d.slice(3);
+  else if (d.startsWith('91') && d.length === 12) d = d.slice(2);
+  else if (d.startsWith('0') && d.length === 11) d = d.slice(1);
+  return /^[6-9]\d{9}$/.test(d) ? d : '';
+}
 
 export default function Login() {
-  const { login, otpLogin, sendOtp } = useAuth();
+  const { login, otpLogin, sendOtp, lookupPhone, demoLogin } = useAuth();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const next = searchParams.get('next');
 
-  const [mode, setMode] = useState('password'); // password | otp
-  const [role, setRole] = useState(searchParams.get('role') === 'admin' ? 'admin' : 'rider');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [otpPhone, setOtpPhone] = useState('');
+  const [step, setStep] = useState('phone'); // phone | otp
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [demoOtp, setDemoOtp] = useState('');
   const [expiresAt, setExpiresAt] = useState(0);
   const [expired, setExpired] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [otpBusy, setOtpBusy] = useState(false);
 
-  const pickRole = (r) => {
-    setRole(r);
-    setError('');
+  const [showPassword, setShowPassword] = useState(searchParams.get('role') === 'admin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const [showDemo, setShowDemo] = useState(false);
+  const [demoAccounts, setDemoAccounts] = useState([]);
+  const [quickBusy, setQuickBusy] = useState('');
+
+  useEffect(() => {
+    client
+      .get('/auth/demo-accounts')
+      .then(({ data }) => setDemoAccounts(data.accounts || []))
+      .catch(() => {});
+  }, []);
+
+  const goHome = () => {
+    if (next && next.startsWith('/')) return navigate(next, { replace: true });
+    navigate('/', { replace: true });
   };
 
-  const goHome = (user) => navigate(user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : user.role === 'fleet_owner' ? '/fleet' : '/ride');
+  const roleGroups = ROLE_ORDER.map((role) => {
+    const found = demoAccounts.find((a) => a.role === role);
+    return found ? { role, label: ROLE_LABELS[role], index: found.index } : null;
+  }).filter(Boolean);
 
-  const submitPassword = async (e) => {
+  const normalizedPhone = normalizePhoneInput(phone);
+
+  const continueWithPhone = async (e) => {
     e.preventDefault();
-    setBusy(true);
     setError('');
+    setNotFound(false);
+    if (!normalizedPhone) {
+      setError(t('login.errPhone'));
+      return;
+    }
+    setOtpBusy(true);
     try {
-      const { user } = await login(email, password);
-      goHome(user);
+      const { exists } = await lookupPhone(normalizedPhone);
+      if (!exists) {
+        setNotFound(true);
+        return;
+      }
+      const data = await sendOtp(normalizedPhone, 'login');
+      setDemoOtp(data.demoOtp || '');
+      setOtp('');
+      setExpiresAt(Date.now() + (data.expiresInMinutes || 5) * 60 * 1000);
+      setExpired(false);
+      setStep('otp');
     } catch (err) {
-      setError(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? t('login.errNetwork') : t('login.errLogin')));
+      setError(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? t('login.errNetwork') : t('login.errOtp')));
     } finally {
-      setBusy(false);
+      setOtpBusy(false);
     }
   };
 
-  const requestOtp = async () => {
+  const changeNumber = () => {
+    setStep('phone');
+    setOtp('');
+    setDemoOtp('');
+    setExpiresAt(0);
+    setExpired(false);
+    setError('');
+    setNotFound(false);
+  };
+
+  const resendOtp = async () => {
     setError('');
     setDemoOtp('');
     setOtpBusy(true);
     try {
-      const data = await sendOtp(otpPhone, 'login');
+      const data = await sendOtp(normalizedPhone, 'login');
       setDemoOtp(data.demoOtp || '');
       setOtp('');
       setExpiresAt(Date.now() + (data.expiresInMinutes || 5) * 60 * 1000);
@@ -82,13 +125,40 @@ export default function Login() {
     setBusy(true);
     setError('');
     try {
-      const { user } = await otpLogin(otpPhone, otp);
-      goHome(user);
+      await otpLogin(normalizedPhone, otp);
+      goHome();
     } catch (err) {
       setError(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? t('login.errNetwork') : t('login.errOtpLogin')));
       setOtp('');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const submitPassword = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await login(email, password);
+      goHome();
+    } catch (err) {
+      setError(err.response?.data?.message || (err.code === 'ERR_NETWORK' ? t('login.errNetwork') : t('login.errLogin')));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const quickLogin = async (acct) => {
+    setQuickBusy(acct.index);
+    setError('');
+    try {
+      await demoLogin(acct.index);
+      goHome();
+    } catch (err) {
+      setError(err.response?.data?.message || t('login.errLogin'));
+    } finally {
+      setQuickBusy('');
     }
   };
 
@@ -102,29 +172,76 @@ export default function Login() {
 
         {error && <div className="err-box">{error}</div>}
 
-        <div className="seg-row mb">
-          <button type="button" className={`seg${mode === 'password' ? ' active' : ''}`} onClick={() => setMode('password')}>
-            {t('login.tabPassword')}
-          </button>
-          <button type="button" className={`seg${mode === 'otp' ? ' active' : ''}`} onClick={() => setMode('otp')}>
-            {t('login.tabOtp')}
-          </button>
-        </div>
+        {step === 'phone' ? (
+          <form onSubmit={continueWithPhone}>
+            <div className="field">
+              <label>{t('login.mobileLabel')}</label>
+              <input
+                className="input"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  setNotFound(false);
+                  setError('');
+                }}
+                placeholder={t('login.mobilePlaceholder')}
+                inputMode="tel"
+                autoFocus
+              />
+            </div>
+            <p className="small muted" style={{ marginTop: -4, marginBottom: 12 }}>{t('login.phoneHint')}</p>
 
-        <div className="seg-row mb">
-          {ROLES.map((r) => (
-            <button
-              type="button"
-              key={r.key}
-              className={`seg${role === r.key ? ' active' : ''}`}
-              onClick={() => pickRole(r.key)}
-            >
-              {t(ROLE_T[r.key])}
+            {notFound && (
+              <div className="alert alert-info mb">
+                <b>{t('login.newHere')}</b> {t('login.noAccountFound')}
+              </div>
+            )}
+
+            {notFound ? (
+              <Link to={`/register?phone=${normalizedPhone}`} className="btn btn-primary btn-block btn-lg">
+                {t('login.createAccountCta')}
+              </Link>
+            ) : (
+              <button className="btn btn-primary btn-block btn-lg" disabled={otpBusy || !normalizedPhone}>
+                {otpBusy ? t('login.checking') : t('login.continuePhone')}
+              </button>
+            )}
+          </form>
+        ) : (
+          <form onSubmit={submitOtp}>
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="small muted">{t('login.otpSentTo', { phone: `+91 ${normalizedPhone}` })}</span>
+              <button type="button" className="link-btn" onClick={changeNumber}>
+                {t('login.changeNumber')}
+              </button>
+            </div>
+
+            {demoOtp && <div className="alert alert-info mt mb">{t('login.otpSent')} (demo: <b>{demoOtp}</b>)</div>}
+
+            <div className="field otp-container otp-active mt">
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <label style={{ marginBottom: 0 }}>{t('login.otpLabel')}</label>
+                {expired ? <span className="otp-expired">{t('login.otpExpired')}</span> : <OtpTimer expiresAt={expiresAt} onExpire={() => setExpired(true)} />}
+              </div>
+              <OtpInput value={otp} onChange={setOtp} length={6} disabled={expired} />
+              {expired && <div className="small muted mt">{t('login.otpExpiredHint')}</div>}
+            </div>
+
+            <button className="btn btn-primary btn-block btn-lg mt" disabled={busy || !otp || expired || otp.length < 6}>
+              {busy ? t('login.verifying') : t('login.loginWithOtp')}
             </button>
-          ))}
-        </div>
 
-        {mode === 'password' ? (
+            <div className="small mt" style={{ textAlign: 'center' }}>
+              <button type="button" className="link-btn" onClick={resendOtp} disabled={otpBusy}>
+                {otpBusy ? t('login.sending') : t('login.resend')}
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="auth-divider" />
+
+        {showPassword ? (
           <form onSubmit={submitPassword}>
             <div className="field">
               <label>{t('login.emailLabel')}</label>
@@ -134,62 +251,48 @@ export default function Login() {
               <label>{t('login.passwordLabel')}</label>
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
             </div>
-
-            <button className="btn btn-primary btn-block btn-lg" disabled={busy}>
+            <button className="btn btn-ghost btn-block" disabled={busy}>
               {busy ? t('login.loggingIn') : t('login.submit')}
             </button>
+            <div className="small mt" style={{ textAlign: 'center' }}>
+              <Link to="/forgot-password">{t('login.forgot')}</Link>
+            </div>
           </form>
         ) : (
-          <form onSubmit={submitOtp}>
-            <div className="field">
-              <label>{t('login.mobileLabel')}</label>
-              <div className="row">
-                <input
-                  className="input"
-                  value={otpPhone}
-                  onChange={(e) => {
-                    setOtpPhone(e.target.value);
-                    setExpiresAt(0);
-                    setExpired(false);
-                    setDemoOtp('');
-                    setOtp('');
-                  }}
-                  placeholder={t('login.mobilePlaceholder')}
-                  inputMode="tel"
-                />
-                <button type="button" className="btn btn-ghost" onClick={requestOtp} disabled={otpBusy || !otpPhone}>
-                  {otpBusy ? t('login.sending') : otpPhone && (expiresAt || demoOtp) ? t('login.resend') : t('login.sendOtp')}
-                </button>
-              </div>
-            </div>
-
-            {(demoOtp || expiresAt > 0) && (
-              <div className="alert alert-info mb">{t('login.otpSent')}</div>
-            )}
-
-            {expiresAt > 0 && (
-              <div className="field otp-container otp-active">
-                <div className="row" style={{ justifyContent: 'space-between' }}>
-                  <label style={{ marginBottom: 0 }}>{t('login.otpLabel')}</label>
-                  {expired ? <span className="otp-expired">{t('login.otpExpired')}</span> : <OtpTimer expiresAt={expiresAt} onExpire={() => setExpired(true)} />}
-                </div>
-                <OtpInput value={otp} onChange={setOtp} length={6} disabled={expired} />
-                {expired && <div className="small muted mt">{t('login.otpExpiredHint')}</div>}
-              </div>
-            )}
-
-            <button className="btn btn-primary btn-block btn-lg" disabled={busy || !otp || expired || otp.length < 6}>
-              {busy ? t('login.verifying') : t('login.loginWithOtp')}
+          <div className="small" style={{ textAlign: 'center' }}>
+            <button type="button" className="link-btn" onClick={() => setShowPassword(true)}>
+              {t('login.useEmailPassword')}
             </button>
-          </form>
+          </div>
+        )}
+
+        {roleGroups.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <div className="small muted" style={{ textAlign: 'center' }}>
+              <button type="button" className="link-btn" onClick={() => setShowDemo((s) => !s)}>
+                {t('login.quickSignIn')} {showDemo ? '▴' : '▾'}
+              </button>
+            </div>
+            {showDemo && (
+              <div className="seg-row mt" style={{ flexWrap: 'wrap' }}>
+                {roleGroups.map((g) => (
+                  <button
+                    key={g.role}
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => quickLogin(g)}
+                    disabled={!!quickBusy}
+                  >
+                    {quickBusy === g.index ? t('login.loggingIn') : g.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         <div className="small mt" style={{ textAlign: 'center' }}>
           <Link to="/face-login">{t('login.faceLogin')}</Link>
-        </div>
-
-        <div className="small muted mt" style={{ textAlign: 'center' }}>
-          <Link to="/forgot-password">{t('login.forgot')}</Link>
         </div>
 
         <div className="small muted mt" style={{ textAlign: 'center' }}>

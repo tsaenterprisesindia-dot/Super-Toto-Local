@@ -12,6 +12,7 @@ import { useSocket } from '../context/SocketContext.jsx';
 import { moveToward, jitter, formatINR, DESTINATIONS } from '../utils/geo.js';
 
 const ACTIVE_STATUSES = ['assigned', 'driver_arrived', 'in_progress'];
+const LANG_LABEL = { en: 'English', hi: 'Hindi', bn: 'Bengali', mr: 'Marathi', te: 'Telugu', ta: 'Tamil' };
 const SIM_INTERVAL = 2500;
 
 export default function DriverHome() {
@@ -498,6 +499,16 @@ export default function DriverHome() {
                 <span className="muted" style={{ fontStyle: 'italic', fontWeight: 600 }}>You earn (after commission)</span>
                 <b style={{ color: 'var(--brand-dark)', fontSize: 20, fontWeight: 900, fontStyle: 'italic' }}>{formatINR(request.fareBreakup?.driverEarnings)}</b>
               </div>
+              {(request.passengers || request.language) && (
+                <div className="spread">
+                  <span className="muted small">🧍 Rider details</span>
+                  <b className="small">
+                    {`${request.passengers?.adults ?? 1} adult${(request.passengers?.adults ?? 1) > 1 ? 's' : ''}`}
+                    {request.passengers?.children > 0 ? ` · ${request.passengers.children} child${request.passengers.children > 1 ? 'ren' : ''}${request.passengers.freeChildren > 0 ? ` (${request.passengers.freeChildren} free)` : ''}` : ''}
+                    {` · ${LANG_LABEL[request.language] || request.language || 'en'}`}
+                  </b>
+                </div>
+              )}
               <div className="small muted">
                 Rider: {request.rider?.name} {request.rider?.phone ? `· ${request.rider.phone}` : ''}
               </div>

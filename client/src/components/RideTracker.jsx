@@ -10,6 +10,8 @@ import FaceVerifyModal from './FaceVerifyModal.jsx';
 import { useFace } from '../context/FaceProvider.jsx';
 import { STATUS_LABELS, formatINR, formatTime, PAYMENT_METHODS } from '../utils/geo.js';
 
+const LANG_LABEL = { en: 'English', hi: 'Hindi', bn: 'Bengali', mr: 'Marathi', te: 'Telugu', ta: 'Tamil' };
+
 const STEPS = [
   { key: 'assigned', tKey: 'tracker.stAssigned' },
   { key: 'driver_arrived', tKey: 'tracker.stArrived' },
@@ -412,6 +414,14 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
               <b>{t('tracker.luggageLine', { count: ride.luggage.count })}{ride.luggage.charge > 0 ? t('tracker.luggageCharge', { fare: formatINR(ride.luggage.charge) }) : t('tracker.luggageFree')}</b>
             </div>
           )}
+          <div className="spread">
+            <span className="muted">{t('tracker.riderDetails')}</span>
+            <b>
+              {`${ride.passengers?.adults ?? 1} ${t('tracker.adults')}`}
+              {ride.passengers?.children > 0 ? ` · ${ride.passengers.children} ${t('tracker.children')}${ride.passengers.freeChildren > 0 ? ` (${ride.passengers.freeChildren} ${t('tracker.freeShort')})` : ''}` : ''}
+              {` · ${LANG_LABEL[ride.language] || ride.language || 'en'}`}
+            </b>
+          </div>
           {fb.subtotal > 0 && (
             <>
               <div className="spread">

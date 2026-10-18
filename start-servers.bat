@@ -1,29 +1,34 @@
 @echo off
-cd /d "H:\Super Toto Local\server"
+REM Super Toto Local - start the API (5001) and Vite dev server (5174).
+REM Chosen so both run alongside TriVista GST ERP (API 5000 / dev 5173).
+set ROOT=%~dp0
 
-echo Starting Super Toto Local servers...
+REM Stop any previous Super Toto instances on our ports (does not touch 5000/5173).
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /C:":5001 " ^| findstr LISTENING') do taskkill /f /pid %%p >nul 2>&1
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /C:":5174 " ^| findstr LISTENING') do taskkill /f /pid %%p >nul 2>&1
+
+echo Starting Super Toto Local API on 5001...
+start "STL-API" /min cmd /c "cd /d "%ROOT%server" && "C:\Program Files\nodejs\node.exe" src\index.js > "%TEMP%\stl-server.log" 2>&1"
+
+echo Waiting for the API to seed...
+for /l %%i in (1,1,45) do (
+  timeout /t 1 /nobreak >nul
+  netstat -ano | findstr /C:":5001 " | findstr LISTENING >nul 2>&1
+  if not errorlevel 1 goto apiup
+)
+echo   API did not come up in time. See %TEMP%\stl-server.log
+pause
+exit /b 1
+
+:apiup
+echo Starting Super Toto Local web (Vite) on 5174...
+start "STL-Web" /min cmd /c "cd /d "%ROOT%client" && "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dev > "%TEMP%\stl-vite.log" 2>&1"
+
 echo.
-
-REM Kill any existing node processes on our ports
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5000.*LISTENING"') do taskkill /PID %%a /F >nul 2>&1
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5173.*LISTENING"') do taskkill /PID %%a /F >nul 2>&1
-
-REM Start API server in background
-start "SuperToto-API" /MIN "C:\Program Files\nodejs\node.exe" "src\index.js"
-echo [%time%] API server started on port 5000
-
-REM Wait for server to be ready
-timeout /t 10 /nobreak >nul
-
-REM Start Vite dev server in background  
-cd /d "H:\Super Toto Local\client"
-start "SuperToto-Web" /MIN "C:\Program Files\nodejs\node.exe" "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" run dev
-echo [%time%] Vite dev server started on port 5173
-
+echo Both Super Toto Local servers are running:
+echo   App :  http://localhost:5174
+echo   API :  http://localhost:5001
+echo   Health: http://localhost:5001/api/health
 echo.
-echo Both servers are running!
-echo   Web:    http://localhost:5173
-echo   API:    http://localhost:5000
-echo.
-echo Close this window or press Ctrl+C to stop.
+echo Logs: %TEMP%\stl-server.log and %TEMP%\stl-vite.log
 pause

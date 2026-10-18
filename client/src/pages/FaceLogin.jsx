@@ -36,9 +36,9 @@ export default function FaceLogin() {
       return;
     }
     try {
-      const { user } = await faceLogin(email, res.descriptor);
+      await faceLogin(email, res.descriptor);
       setFaceOpen(false);
-      navigate(user.role === 'driver' ? '/driver' : '/ride');
+      navigate('/');
     } catch (err) {
       const msg = err.response?.data?.message;
       if (err.response?.status === 403 && /No face enrolled/i.test(msg || '')) {

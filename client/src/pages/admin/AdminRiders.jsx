@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
 import client from '../../api/client.js';
-import { apiBase } from '../../api/config.js';
 import Modal from '../../components/Modal.jsx';
 import { timeAgo } from '../../utils/geo.js';
 
@@ -50,6 +49,21 @@ export default function AdminRiders() {
       setDocInfo(data.rider || null);
     } catch {
       setDocList([]);
+    } finally {
+      setDocBusy(false);
+    }
+  };
+
+  const viewDoc = async (doc) => {
+    if (!docTarget || !doc?._id) return;
+    setDocBusy(true);
+    try {
+      const res = await client.get(`/admin/riders/${docTarget._id}/documents/${doc._id}/download`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' }));
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      setDocMsg('Could not open the document');
     } finally {
       setDocBusy(false);
     }
@@ -335,7 +349,6 @@ export default function AdminRiders() {
           const DOC_LABELS = { aadhaar: 'Aadhaar Card (PDF)' };
           const STATUS_CONFIG = { pending: { label: 'Under Review', cls: 'badge-amber' }, approved: { label: 'Approved', cls: 'badge-green' }, rejected: { label: 'Rejected', cls: 'badge-red' } };
           const st = STATUS_CONFIG[doc.status] || STATUS_CONFIG.pending;
-          const baseUrl = apiBase();
           return (
             <div key={doc._id} className="card" style={{ background: 'var(--bg)', padding: 12, marginBottom: 10 }}>
               <div className="spread" style={{ marginBottom: 6 }}>
@@ -349,9 +362,9 @@ export default function AdminRiders() {
                 <div className="err-box mb" style={{ fontSize: 12 }}>Reason: {doc.rejectionReason}</div>
               )}
               <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
-                <a href={`${baseUrl}/uploads/${doc.filename}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost small">
+                <button className="btn btn-ghost small" disabled={docBusy} onClick={() => viewDoc(doc)}>
                   View ↗
-                </a>
+                </button>
                 {doc.status !== 'approved' && (
                   <button className="btn btn-primary small" disabled={docBusy} onClick={() => reviewDoc(doc._id, 'approve')}>
                     Approve

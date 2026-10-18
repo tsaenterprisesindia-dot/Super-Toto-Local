@@ -1,4 +1,4 @@
-const CACHE = 'super-toto-v2';
+const CACHE = 'super-toto-v14';
 const CORE_ASSETS = [
   '/',
   '/index.html',

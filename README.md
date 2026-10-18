@@ -21,10 +21,42 @@ MERN stack:
 
 ```bash
 npm install       # installs server + client (npm workspaces)
-npm run dev       # starts API on :5000 and the Vite client on :5173
+npm run dev       # starts API on :5001 and the Vite client on :5174
 ```
 
-Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/socket.io` to the API.
+There are two ways to run it on Windows:
+
+| Launcher | Mode | Open |
+| --- | --- | --- |
+| **`start-app.bat`** | Single URL — builds the web app once, then serves the API **and** the frontend together | **http://localhost:5001** |
+| **`start-dev.bat`** / `start-servers.bat` | Dev — API + Vite with hot reload | **http://localhost:5174** |
+
+In single-URL mode (`NODE_ENV=production`) the backend serves the built app from
+`client/dist`, so everything lives on **http://localhost:5001**. Pass `rebuild` to
+force a fresh build (`start-app.bat rebuild`).
+
+In dev mode the Vite dev server proxies `/api` and `/socket.io` to the API on `5001`.
+
+> **Ports.** Super Toto Local uses API `5001` / dev server `5174` — deliberately
+> offset from **TriVista GST ERP** (API `5000`, dev server `5173`) so both apps
+> can run on the same machine at the same time. The API port comes from
+> `server/.env` (`PORT`) and defaults to `5001`; the client port is set in
+> `client/vite.config.js`. Override with the `PORT` env var if you need a
+> different port (remember to update the Vite proxy target to match).
+
+### Keep it running (always-on)
+
+`start-app.bat` stops when you close its window. To keep the app up all the time:
+
+- **`start-server.bat`** — frees port `5001`, clears a stale database lock, then
+  runs the server in a restart loop (it relaunches itself if it crashes). Data
+  still persists in `server/.data`.
+- A `SuperTotoLocal.vbs` item in your **Startup** folder starts that launcher
+  hidden at every logon, so the app is already at **http://localhost:5001** when
+  Windows starts.
+
+To stop it, end the `node.exe` running `src\index.js` in Task Manager, or remove
+the `SuperTotoLocal.vbs` item from `shell:startup`.
 
 ## Demo accounts
 
@@ -87,17 +119,32 @@ Open **http://localhost:5173**. The Vite dev server proxies `/api` and `/socket.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MONGODB_URI` | (in-memory) | Persistent MongoDB connection (Atlas/local) |
+| `MONGODB_URI` | *(blank)* | External MongoDB connection (Atlas / your own mongod). Blank = use the bundled on-disk database |
+| `MONGODB_DATA_DIR` | `server/.data/db` | Where the bundled MongoDB stores files |
+| `MONGODB_IN_MEMORY` | *(unset)* | Set to `1` for a throwaway in-memory DB (data resets on restart) |
 | `JWT_SECRET` | *(required for non-local runs)* | JWT signing secret — the server **refuses to start in production without it** |
 | `UPI_ID` | *(empty)* | Operator UPI handle for payments (`Admin → Settings → UPI` can also set it) |
 | `FACE_MATCH_THRESHOLD` | `0.6` | Max L2 distance to accept a face match |
-| `PORT` | `5000` | API port |
+| `PORT` | `5001` | API port (5001 so it can run beside TriVista GST ERP on 5000) |
+
+### Local data & persistence
+
+Out of the box the server starts the **bundled MongoDB** (via `mongodb-memory-server`)
+against an on-disk folder at `server/.data/db`. Demo data is seeded once and then
+**persists across restarts** — no separate MongoDB install required. The folder is
+git-ignored.
+
+- To start fresh, stop the server and delete `server/.data/` (or `npm run seed` to re-seed).
+- To use a real/external database instead, set `MONGODB_URI` in `server/.env`.
+- To go back to an ephemeral database, set `MONGODB_IN_MEMORY=1`.
+- The integration tests always use an isolated in-memory database, so they never
+  touch your local data.
 
 ## Project structure
 
 ```
 server/src
-  config/db.js            MongoDB (memory or MONGODB_URI)
+  config/db.js            MongoDB (bundled on-disk, in-memory, or MONGODB_URI)
   models/                 User (faceDescriptor / faceRegistered), Ride
   middleware/             JWT auth + roles, error handling
   routes/                 auth (login / face-login / me), face (register/verify),

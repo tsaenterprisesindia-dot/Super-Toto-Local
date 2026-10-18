@@ -4,9 +4,24 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext.jsx';
 import client from '../api/client.js';
 import LanguageSwitcher from '../components/LanguageSwitcher.jsx';
+import Nav from '../components/Nav.jsx';
 import logo from '../assets/super-toto-logo.png';
 
 const DEFAULT_HELPLINE = '+919811997286';
+
+// Colour the brand name "Super Toto" green wherever it appears in a heading.
+function highlightBrand(text) {
+  const brand = 'Super Toto';
+  const idx = text.indexOf(brand);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <span className="brand-green">{brand}</span>
+      {text.slice(idx + brand.length)}
+    </>
+  );
+}
 
 export default function Landing() {
   const { user } = useAuth();
@@ -20,8 +35,7 @@ export default function Landing() {
       .catch(() => {});
   }, []);
 
-  const start = user ? (user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : user.role === 'fleet_owner' ? '/fleet' : '/ride') : '/login';
-  const bookRide = user?.role === 'rider' ? '/ride' : start;
+  const bookRide = '/ride';
   const helplinePhone = contact.helplinePhone || DEFAULT_HELPLINE;
   const helplineLabel = contact.helplineLabel || t('nav.helpline');
   const showHelpline = contact.showHelpline !== false && !!helplinePhone;
@@ -50,6 +64,9 @@ export default function Landing() {
 
   return (
     <div className="landing">
+      {user ? (
+        <Nav />
+      ) : (
       <header className="landing-top">
         <Link to="/" className="landing-brand">
           <img src={logo} alt="Super Toto Local logo" />
@@ -72,12 +89,13 @@ export default function Landing() {
           <LanguageSwitcher />
         </div>
       </header>
+      )}
 
       <section className="hero">
         <span className="chip chip-active hero-chip">{t('landing.heroChip')}</span>
 
         <h1>
-          {t('landing.heroTitle1')}
+          {highlightBrand(t('landing.heroTitle1'))}
           <span className="accent">,</span>
           <br />
           {t('landing.heroTitle2')}
@@ -85,21 +103,15 @@ export default function Landing() {
         <p>{t('landing.heroSub')}</p>
 
         <div className="hero-btns" data-tt="landing-cta">
-          {user ? (
-            <Link to={start} className="btn btn-primary btn-lg">
-              {t('landing.openApp')}
-            </Link>
-          ) : (
-            <>
-              <Link to="/login" className="btn btn-primary btn-lg">
-                {t('landing.ctaRide')}
-              </Link>
-              <Link to="/register" className="btn btn-ghost btn-lg">
-                {t('landing.signupFree')}
-              </Link>
-            </>
-          )}
+          <Link to="/ride" className="btn btn-primary btn-lg">
+            {t('landing.bookRide')}
+          </Link>
         </div>
+        {!user && (
+          <p className="small muted" style={{ marginTop: 10 }}>
+            <Link to="/login">{t('login.haveAccountSignIn')}</Link>
+          </p>
+        )}
 
         <div className="emergency-strip" data-tt="landing-ambulance">
           <div className="emergency-icon" aria-hidden="true">

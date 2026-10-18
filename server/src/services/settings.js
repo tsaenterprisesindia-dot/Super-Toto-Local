@@ -128,7 +128,7 @@ export const STATE_DEFAULT_POLICY = {
 export const GST_DEFAULT_CONFIG = {
   gstin: '',
   companyName: 'TSA Enterprises India',
-  registeredStateCode: 'SK',
+  registeredStateCode: 'BR',
   sacCodeDefault: '996412',
   invoicePrefix: 'STL',
   invoiceSeriesStart: 100001,
@@ -715,9 +715,9 @@ export async function saveChatbotConfig(input = {}) {
 
 export const COMPLIANCE_DEFAULTS = {
   gstin: '',
-  operatingState: 'Delhi',
+  operatingState: 'Bihar',
   legalEntityName: 'TSA Enterprises',
-  legalAddress: '',
+  legalAddress: 'District Katihar, Bihar',
   surgeCap: 1.5, // state-compliant max surge multiplier
   cancellationFee: 20,
   cancellationPolicy:

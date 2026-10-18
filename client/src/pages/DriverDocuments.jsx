@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Nav from '../components/Nav.jsx';
 import client from '../api/client.js';
-import { apiBase } from '../api/config.js';
 import { formatAadhaar } from '../utils/aadhaar.js';
 
 const DOC_TYPES = [
@@ -81,6 +80,18 @@ export default function DriverDocuments() {
     }
   };
 
+  const viewDoc = async (doc) => {
+    if (!doc?._id) return;
+    try {
+      const res = await client.get(`/driver/documents/${doc._id}/download`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: res.headers['content-type'] || 'application/octet-stream' }));
+      window.open(url, '_blank', 'noopener');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch {
+      setErr('Could not open the document');
+    }
+  };
+
   const allRequiredUploaded = DOC_TYPES.filter((d) => isRequired(d.key)).every((d) => {
     const doc = getDoc(d.key);
     return doc && doc.status !== 'rejected';
@@ -90,8 +101,6 @@ export default function DriverDocuments() {
     const doc = getDoc(d.key);
     return doc && doc.status === 'approved';
   });
-
-  const baseUrl = apiBase();
 
   return (
     <>
@@ -213,15 +222,14 @@ export default function DriverDocuments() {
                   </div>
 
                   {existing && existing.status !== 'rejected' && (
-                    <a
-                      href={`${baseUrl}/uploads/${existing.filename}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="small"
+                    <button
+                      type="button"
+                      onClick={() => viewDoc(existing)}
+                      className="small link-btn"
                       style={{ display: 'inline-block', marginTop: 8 }}
                     >
                       View uploaded file ↗
-                    </a>
+                    </button>
                   )}
                 </div>
               );

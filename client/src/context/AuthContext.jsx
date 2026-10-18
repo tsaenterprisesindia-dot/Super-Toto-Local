@@ -60,6 +60,17 @@ export function AuthProvider({ children }) {
     [persist]
   );
 
+  // Demo one-click sign-in: the server resolves the account, so no email or
+  // password is ever handled by the browser.
+  const demoLogin = useCallback(
+    async (index) => {
+      const { data } = await client.post('/auth/demo-login', { index });
+      persist(data);
+      return data;
+    },
+    [persist]
+  );
+
   const faceLogin = useCallback(
     async (email, descriptor) => {
       const { data } = await client.post('/auth/face-login', { email, descriptor });
@@ -68,6 +79,13 @@ export function AuthProvider({ children }) {
     },
     [persist]
   );
+
+  // Phone-first login: check whether a number is registered before we send
+  // an OTP, so the same screen can route people to sign-up instead.
+  const lookupPhone = useCallback(async (phone) => {
+    const { data } = await client.post('/auth/lookup', { phone });
+    return data;
+  }, []);
 
   const sendOtp = useCallback(async (phone, purpose) => {
     const { data } = await client.post('/auth/send-otp', { phone, purpose });
@@ -118,7 +136,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, faceLogin, otpLogin, sendOtp, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, setUser, loading, login, demoLogin, faceLogin, otpLogin, sendOtp, lookupPhone, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -27,6 +27,11 @@ export function emitRideUpdate(io, rideId) {
     });
     userIds.forEach((uid) => io.to(`user:${uid}`).emit('ride:updated', ride));
     io.to(`ride:${rideId}`).emit('ride:updated', ride);
+    // Shared rides change what seats are open to other riders, so let every
+    // rider refresh their "trips with free seats" list in real time.
+    if (ride.shared?.enabled) {
+      io.to('riders').emit('shared:updated', { rideId: String(rideId), at: Date.now() });
+    }
   });
 }
 
@@ -150,6 +155,7 @@ export function setupSocket(io) {
     const { id, role } = socket.user;
     socket.join(`user:${id}`);
     if (role === 'admin') socket.join('admins');
+    if (role === 'rider') socket.join('riders');
 
     // Driver live-location streaming
     socket.on('driver:location', async (payload) => {

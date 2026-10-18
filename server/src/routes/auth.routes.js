@@ -6,6 +6,7 @@ import { createCaptcha, verifyCaptcha } from '../utils/captcha.js';
 import { normalizePhone } from '../utils/phone.js';
 import { createOtp, verifyOtp } from '../utils/otp.js';
 import { validateAadhaar } from '../utils/aadhaar.js';
+import { DEMO_ACCOUNTS } from '../config/demo.js';
 
 // Resolve an account by an email address or an Indian mobile number.
 // 'identifier' may be either; returns the matching User (or null).
@@ -26,6 +27,35 @@ export default function authRoutes() {
   router.get('/captcha', (_req, res) => {
     const { id, question } = createCaptcha();
     res.json({ captchaId: id, question });
+  });
+
+  // Quick demo login for the landing page. The browser only ever receives a
+  // role and a display name (never an email, login id, phone or password);
+  // the sign-in itself happens here on the server. Disabled in production
+  // unless ALLOW_DEMO_LOGIN=1, so real deployments expose nothing.
+  const demoEnabled = () => process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEMO_LOGIN === '1';
+
+  router.get('/demo-accounts', (_req, res) => {
+    if (!demoEnabled()) return res.json({ accounts: [] });
+    res.json({ accounts: DEMO_ACCOUNTS.map((a, index) => ({ index, role: a.role })) });
+  });
+
+  router.post('/demo-login', async (req, res, next) => {
+    try {
+      if (!demoEnabled()) return res.status(404).json({ message: 'Not available' });
+      const index = Number(req.body?.index);
+      const account = Number.isInteger(index) ? DEMO_ACCOUNTS[index] : null;
+      if (!account) return res.status(400).json({ message: 'Unknown demo account' });
+      // This is an explicit demo convenience (gated by ALLOW_DEMO_LOGIN), so it
+      // intentionally skips the approval / suspension gates so every role
+      // button always works during a walkthrough.
+      const user = await User.findOne({ email: account.email });
+      if (!user) return res.status(404).json({ message: 'Demo account not seeded yet' });
+      const token = signToken(user);
+      res.json({ token, user: user.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
   });
 
   router.post('/register', async (req, res, next) => {
@@ -103,6 +133,22 @@ export default function authRoutes() {
 
       const token = signToken(user);
       res.status(201).json({ token, user: user.toSafeJSON() });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Check if a phone number exists; returns { exists: true/false }.
+  // Useful for phone-first login flow.
+  router.post('/lookup', async (req, res, next) => {
+    try {
+      const { phone: rawPhone } = req.body;
+      const phone = normalizePhone(rawPhone);
+      if (!phone) {
+        return res.status(400).json({ message: 'A valid 10-digit mobile number is required' });
+      }
+      const user = await User.findOne({ phone });
+      res.json({ exists: !!user });
     } catch (err) {
       next(err);
     }
