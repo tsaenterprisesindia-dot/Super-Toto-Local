@@ -15,6 +15,7 @@ import { addCashCollection, settleCashDue, cashStatus, maybeSendCashReminder, pl
 import { notifyUser } from '../services/notify.js';
 import Invoice from '../models/Invoice.js';
 import { getGstConfig } from '../services/settings.js';
+import { ensureTripPhotoDir } from '../utils/tripPhoto.js';
 
 const uploadsDir = path.join(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -49,6 +50,30 @@ const upload = multer({
     if (!allowed) return cb(new Error(`Unknown document type: ${docType}`));
     if (!allowed.includes(file.mimetype)) {
       return cb(new Error(`${DOC_LABELS[docType]} must be ${docType === 'photo' ? 'an image (JPG/PNG)' : 'a PDF file'}`));
+    }
+    cb(null, true);
+  },
+});
+
+// Trip safety photos (driver selfie with the riders, taken before starting the
+// ride). Stored separately from onboarding documents; removed by the retention
+// sweep after the configured number of days.
+const TRIP_PHOTO_DIR = ensureTripPhotoDir();
+
+const photoStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, TRIP_PHOTO_DIR),
+  filename: (_req, file, cb) => {
+    const ext = file.mimetype === 'image/png' ? '.png' : file.mimetype === 'image/webp' ? '.webp' : '.jpg';
+    cb(null, `trip-${crypto.randomUUID()}${ext}`);
+  },
+});
+
+const photoUpload = multer({
+  storage: photoStorage,
+  limits: { fileSize: 6 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return cb(new Error('The trip photo must be an image (JPG/PNG)'));
     }
     cb(null, true);
   },
@@ -200,20 +225,27 @@ export default function driverRoutes(io) {
 
       applyAssignment(ride);
 
-      // Retry once on a Mongoose optimistic-concurrency conflict: the concurrent
-      // background dispatch (socket.js) may have just bumped the ride's __v.
-      try {
-        await ride.save();
-      } catch (err) {
-        if (err && err.name === 'VersionError') {
+      // Retry a few times on a Mongoose optimistic-concurrency conflict: the
+      // concurrent background dispatch (socket.js) may have just bumped the
+      // ride's __v. Re-fetch each time and bail if it is no longer open.
+      let saved = false;
+      let lastErr = null;
+      for (let attempt = 0; attempt < 4 && !saved; attempt += 1) {
+        try {
+          await ride.save();
+          saved = true;
+        } catch (err) {
+          lastErr = err;
+          if (!err || err.name !== 'VersionError') throw err;
           ride = await Ride.findById(req.params.id);
           if (!ride) return res.status(404).json({ message: 'Ride not found' });
+          if (ride.status !== 'requested') {
+            return res.status(400).json({ message: 'This ride is no longer available' });
+          }
           applyAssignment(ride);
-          await ride.save();
-        } else {
-          throw err;
         }
       }
+      if (!saved) throw lastErr || new Error('Could not accept ride');
 
       await User.findByIdAndUpdate(req.user.id, { currentRide: ride._id, isOnline: true });
 
@@ -303,6 +335,65 @@ export default function driverRoutes(io) {
     }
   });
 
+  // Pickup safety photo: the driver captures a selfie with the riders before
+  // starting the trip. The image is stored on disk (metadata on the ride) and is
+  // kept only for the configured retention window. Re-capturing replaces it.
+  router.post(
+    '/ride-photo/:id',
+    requireApproved,
+    assignedRide,
+    (req, res, next) =>
+      photoUpload.single('photo')(req, res, (err) => {
+        if (err) {
+          const message = err.code === 'LIMIT_FILE_SIZE' ? 'Photo too large (max 6 MB)' : err.message;
+          return res.status(400).json({ message });
+        }
+        return next();
+      }),
+    async (req, res, next) => {
+      try {
+        const cleanup = () => {
+          if (req.file?.filename) {
+            fs.promises.unlink(path.join(TRIP_PHOTO_DIR, req.file.filename)).catch(() => {});
+          }
+        };
+        if (!['assigned', 'driver_arrived'].includes(req.ride.status)) {
+          if (req.file) await fs.promises.unlink(path.join(TRIP_PHOTO_DIR, req.file.filename)).catch(() => {});
+          return res.status(400).json({ message: `Ride is ${req.ride.status}` });
+        }
+        if (!req.file) return res.status(400).json({ message: 'No photo uploaded' });
+
+        const compliance = await getComplianceConfig();
+        const days = Number(compliance.tripPhotoRetentionDays) > 0 ? Math.floor(Number(compliance.tripPhotoRetentionDays)) : 30;
+
+        // Drop the previous capture, if any, so we don't leak files on retake.
+        const prev = req.ride.tripPhoto?.filename;
+        if (prev) {
+          try {
+            await fs.promises.unlink(path.join(TRIP_PHOTO_DIR, prev));
+          } catch {
+            /* already gone */
+          }
+        }
+
+        const capturedAt = new Date();
+        req.ride.tripPhoto = {
+          filename: req.file.filename,
+          originalName: req.file.originalname || 'trip-photo.jpg',
+          mimeType: req.file.mimetype,
+          size: req.file.size,
+          capturedAt,
+          expiresAt: new Date(capturedAt.getTime() + days * 24 * 60 * 60 * 1000),
+        };
+        await req.ride.save();
+        emitRideUpdate(io, req.ride._id);
+        res.json({ ride: await toRideDTO(req.ride._id), retentionDays: days, expiresAt: req.ride.tripPhoto.expiresAt });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
   router.post('/start/:id', requireApproved, assignedRide, async (req, res, next) => {
     try {
       if (!['assigned', 'driver_arrived'].includes(req.ride.status)) {
@@ -315,6 +406,14 @@ export default function driverRoutes(io) {
         return res.status(400).json({
           code: 'FACE_VERIFICATION_REQUIRED',
           message: 'Verify your identity with a selfie before starting this trip',
+        });
+      }
+      // Safety check: capture a photo with the riders before the vehicle moves.
+      const compliance = await getComplianceConfig();
+      if (compliance.requireTripPhoto !== false && !req.ride.tripPhoto?.filename) {
+        return res.status(400).json({
+          code: 'TRIP_PHOTO_REQUIRED',
+          message: 'Take a photo with your riders before starting the trip',
         });
       }
       req.ride.status = 'in_progress';

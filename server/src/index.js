@@ -12,6 +12,7 @@ import { notFound, errorHandler } from './middleware/error.js';
 import { seedIfEmpty } from './seed.js';
 import { seedStateFareDefaults } from './services/settings.js';
 import { runAmbulanceExpirySweep } from './services/ambulance.js';
+import { runTripPhotoSweep } from './services/photoRetention.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,12 +84,26 @@ async function start() {
     console.error('[ambulance] boot expiry sweep failed:', err.message);
   }
   const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  // Pickup safety photos are kept only for their retention window; purge any
+  // that have expired once at boot, then daily alongside the other sweeps.
+  try {
+    const photos = await runTripPhotoSweep();
+    console.log(`[photos] boot retention sweep — checked ${photos.checked}, removed ${photos.removed}`);
+  } catch (err) {
+    console.error('[photos] boot retention sweep failed:', err.message);
+  }
   const dailyTimer = setInterval(async () => {
     try {
       const result = await runAmbulanceExpirySweep({ io });
       console.log(`[ambulance] daily expiry sweep — checked ${result.checked}, suspended ${result.suspended}`);
     } catch (err) {
       console.error('[ambulance] daily expiry sweep failed:', err.message);
+    }
+    try {
+      const photos = await runTripPhotoSweep();
+      if (photos.removed > 0) console.log(`[photos] retention sweep — removed ${photos.removed}`);
+    } catch (err) {
+      console.error('[photos] retention sweep failed:', err.message);
     }
   }, SWEEP_INTERVAL_MS);
   dailyTimer.unref();

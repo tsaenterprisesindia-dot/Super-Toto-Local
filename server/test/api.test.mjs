@@ -69,6 +69,29 @@ async function api(method, p, body, token) {
   return { status: res.status, data };
 }
 
+// Multipart upload helper (used for the pickup safety photo).
+async function apiUpload(p, form, token) {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${B}/api${p}`, { method: 'POST', headers, body: form });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {}
+  return { status: res.status, data };
+}
+
+// A 1x1 PNG — smallest valid image for the trip-photo upload.
+const PNG_1x1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+const tripPhotoForm = () => {
+  const fd = new FormData();
+  fd.append('photo', new Blob([PNG_1x1], { type: 'image/png' }), 'trip.png');
+  return fd;
+};
+
 const login = async (who) => {
   const { status, data } = await api('POST', '/auth/login', CREDS[who]);
   assert.equal(status, 200, `login ${who} should succeed`);
@@ -331,7 +354,26 @@ test('full ride lifecycle: book -> accept -> share+sos -> verify-face gate -> st
   const face = await api('POST', `/driver/verify-face/${rid}`, { descriptor: dimension }, tokens.driver);
   assert.equal(face.status, 409);
 
-  // start (seed driver not face-enabled -> start succeeds without a selfie)
+  // pickup safety photo gate: start is blocked until a photo with the riders is posted
+  const blockedStart = await api('POST', `/driver/start/${rid}`, {}, tokens.driver);
+  assert.equal(blockedStart.status, 400);
+  assert.equal(blockedStart.data.code, 'TRIP_PHOTO_REQUIRED');
+
+  // driver captures a selfie with the riders before starting
+  const photo = await apiUpload(`/driver/ride-photo/${rid}`, tripPhotoForm(), tokens.driver);
+  assert.equal(photo.status, 200, JSON.stringify(photo.data));
+  assert.ok(photo.data.ride.tripPhoto?.filename, 'ride carries the trip photo metadata');
+  assert.ok(photo.data.ride.tripPhoto?.expiresAt, 'trip photo has a retention expiry');
+  assert.equal(photo.data.retentionDays, 30);
+
+  // the pickup photo is served only through an authenticated endpoint
+  const photoRes = await fetch(`${B}/api/rides/${rid}/photo`, { headers: { Authorization: `Bearer ${tokens.rider}` } });
+  assert.equal(photoRes.status, 200);
+  assert.match(photoRes.headers.get('content-type') || '', /image\//);
+  const anonPhoto = await fetch(`${B}/api/rides/${rid}/photo`);
+  assert.equal(anonPhoto.status, 401, 'the pickup photo is not publicly readable');
+
+  // start (seed driver not face-enabled -> start succeeds once the photo is captured)
   const start = await api('POST', `/driver/start/${rid}`, {}, tokens.driver);
   assert.equal(start.status, 200, JSON.stringify(start.data));
   assert.equal(start.data.ride.status, 'in_progress');

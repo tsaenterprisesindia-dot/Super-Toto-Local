@@ -725,6 +725,11 @@ export const COMPLIANCE_DEFAULTS = {
   insurancePolicyNo: '',
   passengerInsuranceNote:
     'Every trip includes passenger and third-party insurance coverage as required under the Motor Vehicles Act, 1988.',
+  // Pickup safety photo: the driver must capture a selfie with the riders before
+  // starting the trip. tripPhotoRetentionDays is how long the image is kept
+  // before the daily retention sweep deletes it.
+  requireTripPhoto: true,
+  tripPhotoRetentionDays: 30,
   grievanceOfficer: {
     name: '',
     designation: 'Grievance Officer',
@@ -792,6 +797,9 @@ export async function saveComplianceConfig(input = {}) {
   if (Number.isFinite(cap) && cap > 1) clean.surgeCap = Math.min(cap, 4);
   const cfee = Number(input.cancellationFee);
   if (Number.isFinite(cfee) && cfee >= 0) clean.cancellationFee = cfee;
+  if (input.requireTripPhoto !== undefined) clean.requireTripPhoto = input.requireTripPhoto === true || input.requireTripPhoto === 'true';
+  const retDays = Number(input.tripPhotoRetentionDays);
+  if (Number.isFinite(retDays) && retDays >= 1) clean.tripPhotoRetentionDays = Math.floor(retDays);
   if (input.aadhaarUidaiMode !== undefined) clean.aadhaarUidaiMode = input.aadhaarUidaiMode === true || input.aadhaarUidaiMode === 'true';
   const driverDocs = input.driverDocs || {};
   clean.driverDocs = { ...DRIVER_DOC_DEFAULTS };

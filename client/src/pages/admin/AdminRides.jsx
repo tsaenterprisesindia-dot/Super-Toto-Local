@@ -6,6 +6,7 @@ import { printInvoice } from '../../utils/invoicePrint.js';
 export default function AdminRides() {
   const [rides, setRides] = useState([]);
   const [busyId, setBusyId] = useState(null);
+  const [photoId, setPhotoId] = useState(null);
 
   useEffect(() => {
     client.get('/admin/rides').then(({ data }) => setRides(data.rides)).catch(() => {});
@@ -17,9 +18,23 @@ export default function AdminRides() {
       const { data } = await client.get(`/rides/${id}/invoice`);
       printInvoice(data.invoice);
     } catch (e) {
-      alert(e.response?.data?.message || 'Could not download invoice');
+      alert(e.response?.data?.message || 'Failed to load invoice');
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const viewPhoto = async (id) => {
+    setPhotoId(id);
+    try {
+      const { data } = await client.get(`/rides/${id}/photo`, { responseType: 'blob' });
+      const url = URL.createObjectURL(data);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      alert(e.response?.data?.message || 'No pickup photo for this ride');
+    } finally {
+      setPhotoId(null);
     }
   };
 
@@ -39,6 +54,7 @@ export default function AdminRides() {
               <th>Payment</th>
               <th>Method</th>
               <th>Invoice</th>
+              <th>Pickup photo</th>
             </tr>
           </thead>
           <tbody>
@@ -76,6 +92,20 @@ export default function AdminRides() {
                   >
                     {busyId === r._id ? '…' : '🧾 PDF'}
                   </button>
+                </td>
+                <td>
+                  {r.tripPhoto?.filename ? (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ padding: '4px 8px', fontSize: 12 }}
+                      disabled={photoId === r._id}
+                      onClick={() => viewPhoto(r._id)}
+                    >
+                      {photoId === r._id ? '…' : '📷 Photo'}
+                    </button>
+                  ) : (
+                    <span className="small muted">—</span>
+                  )}
                 </td>
               </tr>
             ))}

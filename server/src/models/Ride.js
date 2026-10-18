@@ -166,6 +166,19 @@ const rideSchema = new mongoose.Schema(
     // Per-trip driver identity verification (selfie matched against enrolled face)
     driverSelfieVerifiedAt: { type: Date, default: null },
 
+    // Pickup safety photo: the driver captures a selfie with the riders on board
+    // before starting the trip. Only this metadata lives on the ride; the image
+    // itself is stored on disk and auto-deleted by the retention sweep once
+    // expiresAt passes (see services/photoRetention.js).
+    tripPhoto: {
+      filename: { type: String, default: '' },
+      originalName: { type: String, default: '' },
+      mimeType: { type: String, default: '' },
+      size: { type: Number, default: 0 },
+      capturedAt: { type: Date, default: null },
+      expiresAt: { type: Date, default: null },
+    },
+
     // Invoice details
     invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: 'Invoice', default: null },
     invoiceNumber: { type: String, default: '' },

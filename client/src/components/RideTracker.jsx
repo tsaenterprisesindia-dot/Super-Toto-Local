@@ -7,6 +7,7 @@ import AdBanner from './AdBanner.jsx';
 import AdInterstitial from './AdInterstitial.jsx';
 import Modal from './Modal.jsx';
 import FaceVerifyModal from './FaceVerifyModal.jsx';
+import CameraCapture from './CameraCapture.jsx';
 import { useFace } from '../context/FaceProvider.jsx';
 import { STATUS_LABELS, formatINR, formatTime, PAYMENT_METHODS } from '../utils/geo.js';
 
@@ -94,6 +95,13 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
   const [wallet, setWallet] = useState(null);
   const [verifyOpen, setVerifyOpen] = useState(false);
 
+  // Pickup safety photo (driver + riders)
+  const [photoPolicy, setPhotoPolicy] = useState({ requireTripPhoto: true, retentionDays: 30 });
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoErr, setPhotoErr] = useState('');
+  const [photoViewBusy, setPhotoViewBusy] = useState(false);
+
   // SOS + live trip sharing
   const [sosOpen, setSosOpen] = useState(false);
   const [sosMsg, setSosMsg] = useState('');
@@ -139,6 +147,7 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
     client.get('/ads-config').then(({ data }) => setAdsCfg(data.adsConfig || {})).catch(() => {});
     client.get('/upi-config').then(({ data }) => setUpiCfg(data.upiConfig || {})).catch(() => {});
     client.get('/seat-booking-config').then(({ data }) => setSeatCfg(data.seatBookingConfig || { mode: 'shared' })).catch(() => {});
+    client.get('/rides/photo-policy').then(({ data }) => setPhotoPolicy(data)).catch(() => {});
     if (isRider) {
       client.get('/rider/wallet').then(({ data }) => setWallet(data)).catch(() => {});
     }
@@ -165,6 +174,38 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
       setErr(e.response?.data?.message || t('tracker.errGeneric'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const captureTripPhoto = async (blob) => {
+    setPhotoBusy(true);
+    setPhotoErr('');
+    try {
+      const fd = new FormData();
+      fd.append('photo', blob, 'trip-photo.jpg');
+      const { data } = await client.post(`/driver/ride-photo/${ride._id}`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setRide(data.ride || data);
+      setPhotoOpen(false);
+    } catch (e) {
+      setPhotoErr(e.response?.data?.message || t('tracker.photoErrGeneric'));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const viewTripPhoto = async () => {
+    setPhotoViewBusy(true);
+    try {
+      const { data } = await client.get(`/rides/${ride._id}/photo`, { responseType: 'blob' });
+      const url = URL.createObjectURL(data);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) {
+      setErr(e.response?.data?.message || t('tracker.photoErrGeneric'));
+    } finally {
+      setPhotoViewBusy(false);
     }
   };
 
@@ -756,15 +797,42 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
               </button>
             )}
             <button
+              className={ride.tripPhoto?.filename ? 'btn btn-ghost btn-block' : 'btn btn-amber btn-block btn-lg'}
+              style={{ marginBottom: 10 }}
+              disabled={busy}
+              onClick={() => {
+                setPhotoErr('');
+                setPhotoOpen(true);
+              }}
+            >
+              {ride.tripPhoto?.filename ? t('tracker.photoRetake') : t('tracker.photoCta')}
+            </button>
+            {ride.tripPhoto?.filename && (
+              <div className="small" style={{ color: '#16a34a', marginBottom: 10, fontWeight: 600 }}>
+                ✅ {t('tracker.photoCaptured')}
+              </div>
+            )}
+            <button
               className="btn btn-primary btn-block btn-lg"
-              disabled={busy || (face.faceRegistered && !ride.driverSelfieVerifiedAt)}
+              disabled={
+                busy ||
+                (face.faceRegistered && !ride.driverSelfieVerifiedAt) ||
+                (photoPolicy.requireTripPhoto && !ride.tripPhoto?.filename)
+              }
               onClick={() => act(() => client.post(`/driver/start/${ride._id}`))}
             >
-              {face.faceRegistered && !ride.driverSelfieVerifiedAt
-                ? t('tracker.startLocked')
-                : t('tracker.startTrip')}
+              {photoPolicy.requireTripPhoto && !ride.tripPhoto?.filename
+                ? t('tracker.startLockedPhoto')
+                : face.faceRegistered && !ride.driverSelfieVerifiedAt
+                  ? t('tracker.startLocked')
+                  : t('tracker.startTrip')}
             </button>
           </div>
+        )}
+        {ride.tripPhoto?.filename && ['in_progress', 'completed'].includes(ride.status) && (
+          <button className="btn btn-ghost btn-block" style={{ marginTop: 8 }} disabled={photoViewBusy} onClick={viewTripPhoto}>
+            {photoViewBusy ? '…' : t('tracker.viewPhoto')}
+          </button>
         )}
         {!isRider && ride.status === 'in_progress' && (
           <button
@@ -856,6 +924,14 @@ export default function RideTracker({ ride, role, driverPos, setRide, socket }) 
         }}
         apiFactory={(descriptor) => client.post(`/driver/verify-face/${ride._id}`, { descriptor })}
         title={t('tracker.verifyFaceTitle')}
+      />
+      <CameraCapture
+        open={photoOpen}
+        busy={photoBusy}
+        error={photoErr}
+        onClose={() => setPhotoOpen(false)}
+        onUse={captureTripPhoto}
+        title={t('tracker.photoTitle')}
       />
       <AdBanner />
       <AdInterstitial visible={showInterstitial} onClose={() => setShowInterstitial(false)} />

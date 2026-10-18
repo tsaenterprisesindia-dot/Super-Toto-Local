@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import fs from 'fs';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Ride from '../models/Ride.js';
@@ -23,6 +24,7 @@ import { validatePromo, computePromoDiscount, redeemPromo, recordRedemption } fr
 import { CashLedger } from '../models/CashLedger.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
 import { buildGstInvoice } from '../utils/invoice.js';
+import { tripPhotoPath } from '../utils/tripPhoto.js';
 import {
   dispatchRideRequest,
   emitRideUpdate,
@@ -661,6 +663,23 @@ export default function rideRoutes(io) {
     } catch (e) { next(e); }
   });
 
+  // Trip-photo policy: whether the driver must capture a photo with the riders
+  // before starting, and how long such photos are kept. Drives the driver UI.
+  router.get('/photo-policy', async (req, res, next) => {
+    try {
+      const compliance = await getComplianceConfig();
+      res.json({
+        requireTripPhoto: compliance.requireTripPhoto !== false,
+        retentionDays:
+          Number.isFinite(Number(compliance.tripPhotoRetentionDays)) && Number(compliance.tripPhotoRetentionDays) > 0
+            ? Math.floor(Number(compliance.tripPhotoRetentionDays))
+            : 30,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/:id', async (req, res, next) => {
     try {
       if (!mongoose.isValidObjectId(req.params.id)) {
@@ -678,6 +697,34 @@ export default function rideRoutes(io) {
         return res.status(403).json({ message: 'Not your ride' });
       }
       res.json({ ride });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Stream the pickup safety photo (driver + riders) to the rider, driver or an
+  // admin. Stored on disk and served only here, never as a public static file.
+  router.get('/:id/photo', async (req, res, next) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(404).json({ message: 'Ride not found' });
+      }
+      const ride = await Ride.findById(req.params.id).select('rider driver occupants tripPhoto');
+      if (!ride) return res.status(404).json({ message: 'Ride not found' });
+      const isOcc =
+        String(ride.rider) === String(req.user.id) ||
+        String(ride.driver) === String(req.user.id) ||
+        (ride.occupants || []).some((o) => String(o.rider) === String(req.user.id));
+      if (!isOcc && req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Not your ride' });
+      }
+      const filename = ride.tripPhoto?.filename;
+      if (!filename) return res.status(404).json({ message: 'No trip photo for this ride' });
+      const filePath = tripPhotoPath(filename);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ message: 'Trip photo file not found' });
+      res.setHeader('Content-Type', ride.tripPhoto.mimeType || 'image/jpeg');
+      res.setHeader('Content-Disposition', `inline; filename="trip-photo-${ride._id}.jpg"`);
+      fs.createReadStream(filePath).pipe(res);
     } catch (err) {
       next(err);
     }
