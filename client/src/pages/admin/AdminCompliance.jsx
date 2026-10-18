@@ -161,6 +161,20 @@ export default function AdminCompliance() {
           </div>
           {field('Address', form.grievanceOfficer?.address || '', setGo('address'))}
 
+          <h4 style={{ marginBottom: 4, marginTop: 18 }}>Pickup safety photo</h4>
+          <p className="small muted" style={{ marginTop: 0 }}>
+            When enabled, a driver must capture a selfie with the riders before starting a trip. Admins can view each photo from the Rides page. Photos are deleted automatically after the retention period by a daily sweep.
+          </p>
+          <label className="checkbox-row" style={{ justifyContent: 'space-between', padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8, marginBottom: 10 }}>
+            <span className="small">Require a photo with riders before starting a trip</span>
+            <input
+              type="checkbox"
+              checked={!!form.requireTripPhoto}
+              onChange={(e) => setForm((f) => ({ ...f, requireTripPhoto: e.target.checked }))}
+            />
+          </label>
+          {field('Photo retention (days)', form.tripPhotoRetentionDays ?? 30, set('tripPhotoRetentionDays'), { type: 'number', placeholder: '30' })}
+
           <h4 style={{ marginBottom: 4, marginTop: 18 }}>Driver onboarding documents</h4>
           <p className="small muted" style={{ marginTop: 0 }}>
             Choose which documents a driver must upload and get approved before they can go online. Unchecked = optional.
