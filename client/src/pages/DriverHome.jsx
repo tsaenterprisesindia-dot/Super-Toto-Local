@@ -252,14 +252,18 @@ export default function DriverHome() {
             <div className="stats-grid mb" data-tt="driver-stats">
               <div className="card stat" style={{ background: 'var(--brand-light)', border: '2px solid var(--brand-dark)' }}>
                 <div className="lbl" style={{ fontWeight: 800, color: 'var(--brand-dark)', fontStyle: 'italic' }}>
-                  ✅ Your receivable (after commission)
+                  ✅ Payable to you (unpaid earnings)
                 </div>
                 <div className="num" style={{ color: 'var(--brand-dark)', fontSize: 30, fontWeight: 900, fontStyle: 'italic' }}>
-                  {formatINR(summary?.totals?.revenue || 0)}
+                  {formatINR(summary?.payable || 0)}
                 </div>
                 <div className="small muted">
-                  This is the exact amount you receive · platform commission is already deducted.
+                  After commission, not yet settled. Lifetime earned {formatINR(summary?.lifetimeEarnings || 0)} · paid out {formatINR(summary?.paidOut || 0)}.
                 </div>
+              </div>
+              <div className="card stat">
+                <div className="num">{formatINR(summary?.paidOut || 0)}</div>
+                <div className="lbl">Paid out (lifetime)</div>
               </div>
               <div className="card stat">
                 <div className="num">{summary?.totals?.count || 0}</div>

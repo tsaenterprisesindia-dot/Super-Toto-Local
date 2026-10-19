@@ -8,13 +8,19 @@ export default function FleetDashboard() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [me, setMe] = useState(null);
 
   const load = () => {
     client.get('/fleet/invite-code')
       .then(({ data }) => setCode(data.code || ''))
       .catch((e) => setErr(e.response?.data?.message || 'Could not load invite code'));
+    client.get('/auth/me')
+      .then(({ data }) => setMe(data.user))
+      .catch(() => {});
   };
   useEffect(load, []);
+
+  const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
   const regenerate = async () => {
     if (!window.confirm('Generate a new invite code? The current code will stop working, but drivers who already joined stay in your fleet.')) return;
@@ -51,6 +57,39 @@ export default function FleetDashboard() {
           <Link to="/fleet/vehicles" className="btn btn-primary">Manage Vehicles</Link>
           <Link to="/fleet/drivers" className="btn btn-ghost">Manage Drivers</Link>
         </div>
+      </div>
+
+      <div className="card mt">
+        <h3 style={{ marginTop: 0 }}>Fleet earnings</h3>
+        <div className="stats-grid">
+          <div className="card stat" style={{ background: 'var(--brand-light)', border: '2px solid var(--brand-dark)' }}>
+            <div className="lbl">Payable to you (unpaid)</div>
+            <div className="num" style={{ color: 'var(--brand-dark)', fontSize: 28, fontWeight: 900 }}>{inr(me?.payable)}</div>
+          </div>
+          <div className="card stat">
+            <div className="num">{inr(me?.earnings)}</div>
+            <div className="lbl">Lifetime earned</div>
+          </div>
+          <div className="card stat">
+            <div className="num">{inr(me?.paidOut)}</div>
+            <div className="lbl">Paid out</div>
+          </div>
+        </div>
+        <p className="small muted" style={{ marginBottom: 0 }}>
+          Earnings from rides run on your fleet's vehicles accrue to you. Admin settles payouts; settled payouts
+          appear here automatically.
+        </p>
+        {(me?.payouts || []).length > 0 && (
+          <div className="stack" style={{ marginTop: 10 }}>
+            <b className="small">Recent payouts</b>
+            {me.payouts.slice().reverse().slice(0, 5).map((p) => (
+              <div key={p._id || p.at} className="small spread" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px' }}>
+                <span>{p.note || 'Payout'}</span>
+                <b style={{ color: 'var(--brand-dark)' }}>{inr(p.amount)}</b>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card mt">

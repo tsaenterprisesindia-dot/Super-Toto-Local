@@ -47,6 +47,7 @@ import AdminFeedback from './pages/admin/AdminFeedback.jsx';
 import AdminCompliance from './pages/admin/AdminCompliance.jsx';
 import AdminAmbulances from './pages/admin/AdminAmbulances.jsx';
 import AdminFleet from './pages/admin/AdminFleet.jsx';
+import AdminPayouts from './pages/admin/AdminPayouts.jsx';
 import DriverAmbulance from './pages/DriverAmbulance.jsx';
 import AdminEmergency from './pages/admin/AdminEmergency.jsx';
 import AdminNotifications from './pages/admin/AdminNotifications.jsx';
@@ -218,6 +219,7 @@ export default function App() {
         <Route path="rides" element={<AdminRides />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="cash" element={<AdminCash />} />
+        <Route path="payouts" element={<AdminPayouts />} />
         <Route path="sos" element={<AdminSOS />} />
         <Route path="promos" element={<AdminPromos />} />
         <Route path="vehicle-rates" element={<AdminVehicleRates />} />

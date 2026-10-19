@@ -10,6 +10,7 @@ const LINKS = [
   { to: '/admin/riders', label: '👤 Riders' },
   { to: '/admin/rides', label: '🚕 Rides' },
   { to: '/admin/reports', label: '💰 Reports' },
+  { to: '/admin/payouts', label: '💸 Payouts' },
   { to: '/admin/cash', label: '💵 Cash Settlement' },
   { to: '/admin/sos', label: '🆘 SOS' },
   { to: '/admin/notifications', label: '🔔 Notifications' },

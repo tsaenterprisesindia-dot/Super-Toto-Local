@@ -83,7 +83,20 @@ const userSchema = new mongoose.Schema(
     },
     rating: { type: Number, default: 5 },
     ratingsCount: { type: Number, default: 0 },
+    // Lifetime net earnings accrued to this account (a driver, or a fleet owner
+    // for rides run on the fleet's vehicles). `earnings - paidOut` is what is
+    // still payable to the account holder; see services/payout.js.
     earnings: { type: Number, default: 0 },
+    paidOut: { type: Number, default: 0 }, // lifetime settled to the account holder
+    lastPayoutAt: { type: Date, default: null },
+    payouts: [
+      {
+        amount: { type: Number, default: 0 },
+        note: { type: String, default: '' },
+        by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+        at: { type: Date, default: Date.now },
+      },
+    ],
     totalRides: { type: Number, default: 0 },
     currentRide: { type: mongoose.Schema.Types.ObjectId, ref: 'Ride', default: null },
     // Cash-settlement ledger (driver): amount owed back to the platform from
@@ -173,6 +186,9 @@ const userSchema = new mongoose.Schema(
 userSchema.methods.toSafeJSON = function toSafeJSON() {
   const obj = this.toObject();
   obj.id = obj._id; // ensure id is available (some clients expect it)
+  // Payout summary: what is still owed to this account after prior payouts.
+  obj.paidOut = obj.paidOut || 0;
+  obj.payable = Math.max(0, Math.round(((obj.earnings || 0) - (obj.paidOut || 0)) * 100) / 100);
   delete obj.password; // never expose the password hash
   delete obj.resetCode; // password-reset codes are secrets too
   delete obj.resetExpires;

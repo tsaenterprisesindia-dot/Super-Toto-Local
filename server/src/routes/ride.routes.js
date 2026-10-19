@@ -91,7 +91,10 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   const ambulanceLevel = isAmbulance
     ? (String((ambulanceType || (VEHICLE_TYPES.find((v) => v.id === vtId)?.ambulanceType)) || '').toUpperCase() === 'ALS' ? 'ALS' : 'BLS')
     : '';
-  const isEmergency = !!emergency;
+  // Tolerate truthy serialisations ("true", 1) so a string "false" is never
+  // mistaken for an emergency or a granted consent.
+  const truthy = (v) => v === true || v === 1 || String(v).trim().toLowerCase() === 'true';
+  const isEmergency = truthy(emergency);
   // Ambulance trips are whole-vehicle service calls — no seat booking, ever.
   let seatCfg = await getSeatBookingConfig();
   if (isAmbulance) seatCfg = { mode: 'off', message: '' };
@@ -142,7 +145,10 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   cfg.tripState = effectiveState || stateForCoords(drop) || '';
   const ambulanceCfg = isAmbulance ? await getAmbulanceConfig() : null;
   if (isAmbulance && ambulanceCfg?.maxRideDistanceKm) cfg.maxRideDistanceKm = ambulanceCfg.maxRideDistanceKm;
-  const luggageCharge = computeLuggageCharge(luggageCount, luggageHeavyCount, cfg);
+  // An ambulance call is a whole-vehicle service: billed once regardless of how
+  // many people are carried, and carries no luggage surcharge.
+  const effectiveCharged = isAmbulance ? 1 : pax.chargedPassengers;
+  const luggageCharge = isAmbulance ? 0 : computeLuggageCharge(luggageCount, luggageHeavyCount, cfg);
   const { tripFare, perSeatFare } = computeSharedFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, seatCount);
   // Reserved: whole vehicle at the full trip fare. Shared: per-seat x charged
   // seats (free children discounted). Off: whole-trip fare scaled per charged
@@ -151,7 +157,7 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
     ? tripFare.total
     : seatsEnabled
       ? perSeatFare * chargedSeats
-      : computeFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, pax.chargedPassengers).total;
+      : computeFare(distanceKm, effectiveDurationMin, surge, cfg, luggageCharge, effectiveCharged).total;
   const effectiveGst = { ...tripFare };
   if (effectiveGst.taxableValue === undefined) effectiveGst.taxableValue = effectiveGst.gross;
   return {
@@ -180,8 +186,8 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
     category: isAmbulance ? 'ambulance' : 'taxi',
     ambulanceType: ambulanceLevel,
     emergency: isEmergency,
-    patientConsent: !!patientConsent,
-    waitingAtPickup: !!waitingAtPickup,
+    patientConsent: truthy(patientConsent),
+    waitingAtPickup: truthy(waitingAtPickup),
     requirePatientConsent: isAmbulance ? (ambulanceCfg?.requirePatientConsent ?? true) : false,
     farePolicy: farePolicy
       ? {
@@ -387,6 +393,11 @@ export default function rideRoutes(io) {
       }
 
       const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, adults, children });
+      // Ambulance is never a seat reservation — it must go through the standard
+      // booking flow so patient-consent and state-availability gates apply.
+      if (c.isAmbulance) {
+        return res.status(400).json({ message: 'Ambulance service must be requested through the emergency booking flow, not reserved as seats.' });
+      }
       if (!c.seatsEnabled && c.requestedSeats > 1) {
         return res.status(400).json({ message: 'Seat booking is currently disabled by the operator. Rides are booked for the whole trip (1 passenger).' });
       }

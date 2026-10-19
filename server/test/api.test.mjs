@@ -55,6 +55,10 @@ async function healthReady(timeoutMs = 180000) {
   return false;
 }
 
+function apiWith(token) {
+  return (method, p, body) => api(method, p, body, token);
+}
+
 async function api(method, p, body, token) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -644,6 +648,28 @@ test('ambulance estimate: whole-trip billing, no seat booking, emergency never s
   assert.equal(als.data.surge, 1);
 });
 
+test('ambulance: whole-trip fare ignores passenger count; "false" is not consent; reserve rejected', async () => {
+  const one = await api('POST', '/rides/estimate', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-bls', state: 'SK', emergency: true, adults: 1,
+  }, tokens.rider);
+  const four = await api('POST', '/rides/estimate', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-bls', state: 'SK', emergency: true, adults: 4,
+  }, tokens.rider);
+  assert.equal(one.status, 200);
+  assert.equal(four.status, 200);
+  assert.equal(four.data.riderTotal, one.data.riderTotal, 'ambulance bills per call, not per passenger');
+
+  const strFalse = await api('POST', '/rides', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-bls', state: 'SK', emergency: true, patientConsent: 'false',
+  }, tokens.rider);
+  assert.equal(strFalse.status, 400, 'a string "false" never counts as patient consent');
+
+  const reserved = await api('POST', '/rides/reserve', {
+    pickup: PICKUP, drop: DROP, vehicleType: 'ambulance-bls', state: 'SK', adults: 1,
+  }, tokens.rider);
+  assert.equal(reserved.status, 400, 'ambulance cannot be reserved as seats');
+});
+
 test('ambulance booking: consent required, succeeds with consent, cancel', async () => {
   // no consent → rejected
   const noConsent = await api('POST', '/rides', {
@@ -709,6 +735,79 @@ test('ambulance expiry sweep auto-suspends expired compliant records and notifie
 });
 
 // ------------------------------------------------------------- fleet linking
+test('payouts: driver earnings accrue to driver; fleet owner accrues for fleet rides', async () => {
+  const drv = apiWith(tokens.driver);
+  const r = await api('POST', '/rides', { pickup: PICKUP, drop: DROP, vehicleType: 'toto', seats: 1 }, tokens.rider);
+  assert.equal(r.status, 201, r.data?.message);
+  const rid = r.data.ride._id;
+  const accept = await drv('POST', `/driver/accept/${rid}`);
+  assert.equal(accept.status, 200);
+  const photo = await apiUpload(`/driver/ride-photo/${rid}`, tripPhotoForm(), tokens.driver);
+  assert.equal(photo.status, 200, JSON.stringify(photo.data));
+  const start = await drv('POST', `/driver/start/${rid}`, {});
+  assert.equal(start.status, 200, JSON.stringify(start.data));
+  const comp = await drv('POST', `/driver/complete/${rid}`);
+  assert.equal(comp.status, 200);
+  const earn = comp.data.ride.fareBreakup.driverEarnings;
+  assert.ok(earn > 0);
+  const sum = await drv('GET', '/driver/summary');
+  assert.equal(sum.status, 200);
+  assert.ok(sum.data.payable >= earn - 0.01, 'driver earnings appear as payable');
+
+  // admin can see the payable balance and settle it (full or partial)
+  const me = await api('GET', '/auth/me', null, tokens.driver);
+  const driverId = me.data.user.id;
+  const list = await api('GET', '/admin/payouts', null, tokens.admin);
+  assert.equal(list.status, 200);
+  const row = list.data.payees.find((p) => p.id === driverId);
+  assert.ok(row, 'driver with payable is listed for payout');
+  assert.ok(row.payable >= earn - 0.01);
+
+  const over = await api('POST', `/admin/payouts/${driverId}`, { amount: row.payable + 1000 }, tokens.admin);
+  assert.equal(over.status, 400, 'overpaying the payable balance is rejected');
+
+  const partial = await api('POST', `/admin/payouts/${driverId}`, { amount: 1, note: 'part' }, tokens.admin);
+  assert.equal(partial.status, 200, JSON.stringify(partial.data));
+  assert.ok(partial.data.payable <= row.payable - 0.99);
+
+  const settle = await api('POST', `/admin/payouts/${driverId}`, { amount: partial.data.payable, note: 'UPI test' }, tokens.admin);
+  assert.equal(settle.status, 200, JSON.stringify(settle.data));
+  assert.equal(settle.data.payable, 0);
+
+  const detail = await api('GET', `/admin/payouts/${driverId}`, null, tokens.admin);
+  assert.equal(detail.status, 200);
+  assert.equal(detail.data.payable, 0);
+  assert.equal(detail.data.paidOut, Math.round((row.paidOut + row.payable) * 100) / 100);
+  assert.ok(detail.data.history.length >= 2, 'payout history records each settlement');
+});
+
+test('fleet ride earnings accrue to the fleet owner, not the driver', async () => {
+  const code = (await api('GET', '/fleet/invite-code', null, tokens.fleet)).data.code;
+  assert.equal((await api('POST', '/fleet/join', { code }, tokens.driver)).status, 200);
+  const fleetId = (await api('GET', '/auth/me', null, tokens.fleet)).data.user.id;
+  const driverId = (await api('GET', '/auth/me', null, tokens.driver)).data.user.id;
+  const before = (await api('GET', `/admin/payouts/${fleetId}`, null, tokens.admin)).data;
+  const driverBefore = (await api('GET', `/admin/payouts/${driverId}`, null, tokens.admin)).data;
+
+  const r = await api('POST', '/rides', { pickup: PICKUP, drop: DROP, vehicleType: 'toto', seats: 1 }, tokens.rider);
+  assert.equal(r.status, 201, r.data?.message);
+  const rid = r.data.ride._id;
+  assert.equal((await api('POST', `/driver/accept/${rid}`, {}, tokens.driver)).status, 200);
+  await apiUpload(`/driver/ride-photo/${rid}`, tripPhotoForm(), tokens.driver);
+  assert.equal((await api('POST', `/driver/start/${rid}`, {}, tokens.driver)).status, 200);
+  const comp = await api('POST', `/driver/complete/${rid}`, {}, tokens.driver);
+  assert.equal(comp.status, 200);
+  const earn = comp.data.ride.fareBreakup.driverEarnings;
+  assert.ok(earn > 0);
+
+  const after = (await api('GET', `/admin/payouts/${fleetId}`, null, tokens.admin)).data;
+  assert.ok(after.earnings >= before.earnings + earn - 0.01, 'fleet owner accrued the fleet-ride earnings');
+  const driverAfter = (await api('GET', `/admin/payouts/${driverId}`, null, tokens.admin)).data;
+  assert.equal(driverAfter.earnings, driverBefore.earnings, 'driver did not accrue fleet-ride earnings');
+
+  assert.equal((await api('POST', '/fleet/leave', {}, tokens.driver)).status, 200);
+});
+
 test('fleet owner can fetch an invite code', async () => {
   const { status, data } = await api('GET', '/fleet/invite-code', null, tokens.fleet);
   assert.equal(status, 200, JSON.stringify(data));

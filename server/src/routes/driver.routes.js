@@ -9,7 +9,8 @@ import Ride from '../models/Ride.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRideUpdate, clearDispatchTimer, toRideDTO, dispatchNext } from '../socket.js';
 import { getComplianceConfig, getRequiredDriverDocs } from '../services/settings.js';
-import { faceMatch } from '../utils/pricing.js';
+import { faceMatch, isAmbulanceVehicle } from '../utils/pricing.js';
+import { ambulanceEligibleDriverIds } from '../services/ambulance.js';
 import { CashLedger } from '../models/CashLedger.js';
 import { addCashCollection, settleCashDue, cashStatus, maybeSendCashReminder, platformShareOf } from '../services/cashSettlement.js';
 import { notifyUser } from '../services/notify.js';
@@ -220,6 +221,18 @@ export default function driverRoutes(io) {
       }
       if (!req.userDoc.isOnline || req.userDoc.currentRide) {
         return res.status(400).json({ message: 'You must be online with no active ride to accept' });
+      }
+      // Ambulance calls may only be accepted by a driver whose compliance for the
+      // ride's state + service level is active — re-checked at accept time so a
+      // unit that lapsed after dispatch can never take the call.
+      if (ride.category === 'ambulance' || isAmbulanceVehicle(ride.vehicleType)) {
+        const eligible = await ambulanceEligibleDriverIds({
+          stateCode: ride.stateCode,
+          ambulanceType: ride.ambulanceType || 'BLS',
+        });
+        if (!eligible.has(String(req.user.id))) {
+          return res.status(403).json({ message: 'Your ambulance compliance is not active for this call. Renew your documents before accepting.' });
+        }
       }
       const acceptCompliance = await getComplianceConfig();
       const acceptCash = cashStatus(req.userDoc, acceptCompliance);
@@ -485,14 +498,19 @@ export default function driverRoutes(io) {
       } catch (e) { console.error('invoice gen err', e); }
 
 
+      const netEarning = req.ride.fareBreakup?.driverEarnings || 0;
+      // Fleet payout routing: on a fleet-operated ride the earnings accrue to the
+      // fleet owner (who settles with their driver); the driver still gets the
+      // completed-ride credit. Otherwise they accrue to the driver.
+      const creditToFleet = req.ride.payoutEntity === 'fleet_owner' && req.ride.fleetOwnerId;
       await User.findByIdAndUpdate(req.user.id, {
         currentRide: null,
         isOnline: true,
-        $inc: {
-          totalRides: 1,
-          earnings: req.ride.fareBreakup.driverEarnings || 0,
-        },
+        $inc: { totalRides: 1, ...(creditToFleet ? {} : { earnings: netEarning }) },
       });
+      if (creditToFleet) {
+        await User.findByIdAndUpdate(req.ride.fleetOwnerId, { $inc: { earnings: netEarning } });
+      }
       emitRideUpdate(io, req.ride._id);
       const total = req.ride.fareBreakup?.total || req.ride.fare || 0;
       notifyUser({
@@ -507,10 +525,22 @@ export default function driverRoutes(io) {
         io,
         userId: req.user.id,
         type: 'earnings',
-        title: 'Ride completed — earnings added',
-        message: `You earned ₹${(req.ride.fareBreakup?.driverEarnings || 0).toLocaleString('en-IN')} for this trip.`,
+        title: creditToFleet ? 'Ride completed — fleet ride' : 'Ride completed — earnings added',
+        message: creditToFleet
+          ? `This trip's earnings of ₹${netEarning.toLocaleString('en-IN')} were credited to your fleet owner.`
+          : `You earned ₹${netEarning.toLocaleString('en-IN')} for this trip.`,
         link: '/driver',
       });
+      if (creditToFleet) {
+        notifyUser({
+          io,
+          userId: req.ride.fleetOwnerId,
+          type: 'earnings',
+          title: 'Fleet ride completed — earnings added',
+          message: `₹${netEarning.toLocaleString('en-IN')} was credited to your fleet from a ride completed by ${req.userDoc?.name || 'your driver'}.`,
+          link: '/fleet',
+        });
+      }
       res.json({ ride: await toRideDTO(req.ride._id) });
     } catch (err) {
       next(err);
@@ -586,11 +616,20 @@ export default function driverRoutes(io) {
       const compliance = await getComplianceConfig();
       const cash = cashStatus(req.userDoc, compliance);
 
+      const payable = Math.max(0, Math.round(((req.userDoc.earnings || 0) - (req.userDoc.paidOut || 0)) * 100) / 100);
       res.json({
         completed,
         totals: totals[0] || { revenue: 0, count: 0 },
         online,
         cash,
+        lifetimeEarnings: req.userDoc.earnings || 0,
+        paidOut: req.userDoc.paidOut || 0,
+        payable,
+        payouts: (req.userDoc.payouts || [])
+          .slice()
+          .reverse()
+          .slice(0, 10)
+          .map((p) => ({ id: String(p._id), amount: p.amount, note: p.note, at: p.at })),
       });
     } catch (err) {
       next(err);

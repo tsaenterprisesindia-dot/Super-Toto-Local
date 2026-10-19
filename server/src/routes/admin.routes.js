@@ -14,6 +14,7 @@ import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 import { notifyUser } from '../services/notify.js';
 import AmbulanceCompliance from '../models/AmbulanceCompliance.js';
 import { ambulanceComplianceDTO, runAmbulanceExpirySweep } from '../services/ambulance.js';
+import { payableOf, recordPayout } from '../services/payout.js';
 
 export default function adminRoutes(io) {
   const router = Router();
@@ -243,8 +244,8 @@ export default function adminRoutes(io) {
           { $group: { _id: null, total: { $sum: '$payment.amount' }, count: { $sum: 1 } } },
         ]);
         outstandingAmount = outstanding[0]?.total || 0;
-      } else if (user.role === 'driver') {
-        outstandingAmount = user.earnings || 0; // pending payout
+      } else if (user.role === 'driver' || user.role === 'fleet_owner') {
+        outstandingAmount = payableOf(user); // earnings not yet paid out
       }
 
       if (outstandingAmount > 0 && !settlementConfirmed) {
@@ -380,8 +381,7 @@ export default function adminRoutes(io) {
           },
         ]);
 
-        // Wallet balance = earnings recorded on user minus what has been paid out.
-        const walletBalance = user.earnings || 0;
+        const payable = payableOf(user);
 
         res.json({
           role: 'driver',
@@ -389,9 +389,34 @@ export default function adminRoutes(io) {
           totalCommission: earnings[0]?.totalCommission || 0,
           totalGst: earnings[0]?.totalGst || 0,
           completedRides: earnings[0]?.rideCount || 0,
-          walletBalance,
-          // pending payout = wallet balance (what the driver should receive)
-          pendingPayout: walletBalance,
+          lifetimeEarnings: user.earnings || 0,
+          paidOut: user.paidOut || 0,
+          // payable = earnings recorded on the account minus payouts already made
+          walletBalance: payable,
+          pendingPayout: payable,
+        });
+      } else if (user.role === 'fleet_owner') {
+        const earnings = await Ride.aggregate([
+          { $match: { fleetOwnerId: user._id, status: 'completed' } },
+          {
+            $group: {
+              _id: null,
+              totalEarned: { $sum: '$fareBreakup.driverEarnings' },
+              rideCount: { $sum: 1 },
+            },
+          },
+        ]);
+        const drivers = await User.countDocuments({ fleetOwnerId: user._id, role: 'driver' });
+        const payable = payableOf(user);
+        res.json({
+          role: 'fleet_owner',
+          totalEarned: earnings[0]?.totalEarned || 0,
+          completedRides: earnings[0]?.rideCount || 0,
+          drivers,
+          lifetimeEarnings: user.earnings || 0,
+          paidOut: user.paidOut || 0,
+          walletBalance: payable,
+          pendingPayout: payable,
         });
       } else {
         res.json({ role: 'admin', totalOutstanding: 0, pendingPayout: 0 });
@@ -1190,7 +1215,104 @@ export default function adminRoutes(io) {
     }
   });
 
-  // Safety: SOS alerts from riders (monitoring panel)
+  // --- Payouts (driver / fleet-owner earnings settlement) --------------------
+  // `earnings - paidOut` is the balance still payable to an account. Admin
+  // records payouts here; each one is appended to the account's payout history.
+  router.get('/payouts', async (_req, res, next) => {
+    try {
+      const rows = await User.aggregate([
+        { $match: { role: { $in: ['driver', 'fleet_owner'] } } },
+        { $addFields: { payable: { $subtract: [{ $ifNull: ['$earnings', 0] }, { $ifNull: ['$paidOut', 0] }] } } },
+        { $match: { payable: { $gt: 0.005 } } },
+        { $sort: { payable: -1 } },
+        {
+          $project: {
+            name: 1, phone: 1, role: 1, vehicleNumber: 1,
+            earnings: 1, paidOut: 1, payable: 1, lastPayoutAt: 1,
+          },
+        },
+      ]);
+      const lifetime = await User.aggregate([
+        { $match: { role: { $in: ['driver', 'fleet_owner'] } } },
+        { $group: { _id: null, paid: { $sum: { $ifNull: ['$paidOut', 0] } }, earned: { $sum: { $ifNull: ['$earnings', 0] } } } },
+      ]);
+      const totalPayable = rows.reduce((s, r) => s + (r.payable || 0), 0);
+      res.json({
+        payees: rows.map((r) => ({
+          id: String(r._id),
+          name: r.name || '',
+          phone: r.phone || '',
+          role: r.role,
+          vehicleNumber: r.vehicleNumber || '',
+          earnings: Math.round((r.earnings || 0) * 100) / 100,
+          paidOut: Math.round((r.paidOut || 0) * 100) / 100,
+          payable: Math.round((r.payable || 0) * 100) / 100,
+          lastPayoutAt: r.lastPayoutAt || null,
+        })),
+        totals: {
+          totalPayable: Math.round(totalPayable * 100) / 100,
+          count: rows.length,
+          totalEarned: Math.round((lifetime[0]?.earned || 0) * 100) / 100,
+          totalPaid: Math.round((lifetime[0]?.paid || 0) * 100) / 100,
+        },
+      });
+    } catch (err) { next(err); }
+  });
+
+  // Per-account payout detail: payable balance + full payout history.
+  router.get('/payouts/:userId', async (req, res, next) => {
+    try {
+      const user = await User.findById(req.params.userId);
+      if (!user) return res.status(404).json({ message: 'Account not found' });
+      if (!['driver', 'fleet_owner'].includes(user.role)) {
+        return res.status(400).json({ message: 'Not a driver or fleet-owner account' });
+      }
+      res.json({
+        account: {
+          id: String(user._id),
+          name: user.name || '',
+          phone: user.phone || '',
+          role: user.role,
+          vehicleNumber: user.vehicleNumber || '',
+        },
+        earnings: user.earnings || 0,
+        paidOut: user.paidOut || 0,
+        payable: payableOf(user),
+        lastPayoutAt: user.lastPayoutAt || null,
+        history: (user.payouts || [])
+          .slice()
+          .reverse()
+          .map((p) => ({ id: String(p._id), amount: p.amount, note: p.note, at: p.at })),
+      });
+    } catch (err) { next(err); }
+  });
+
+  // Record a payout to an account (full or partial).
+  router.post('/payouts/:userId', async (req, res, next) => {
+    try {
+      const { amount, note } = req.body || {};
+      const result = await recordPayout({
+        userId: req.params.userId,
+        amount,
+        note,
+        paidBy: req.userDoc?._id || req.user.id,
+      });
+      const user = await User.findById(req.params.userId);
+      notifyUser({
+        io,
+        userId: user._id,
+        type: 'earnings',
+        title: 'Payout recorded',
+        message: `A payout of ₹${Number(result.amount).toLocaleString('en-IN')} was settled to you. Remaining payable: ₹${result.payable.toLocaleString('en-IN')}.`,
+        link: user.role === 'fleet_owner' ? '/fleet' : '/driver',
+      });
+      res.json({ message: 'Payout recorded', ...result });
+    } catch (err) {
+      if (err.status) return res.status(err.status).json({ message: err.message });
+      next(err);
+    }
+  });
+
   router.get('/sos', async (req, res, next) => {
     try {
       const pop = [
