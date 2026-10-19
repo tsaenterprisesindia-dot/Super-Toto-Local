@@ -77,7 +77,7 @@ async function seedDatabase() {
   const fleetPw = await bcrypt.hash(PASSWORDS.fleet, 10);
 
   const admin = await User.create({
-    name: 'Toto Admin',
+    name: 'Super Toto Admin',
     email: 'admin@supertoto.local',
     phone: '9811997286',
     password: adminPw,
@@ -309,7 +309,18 @@ export async function ensureDemoFleetOwner() {
   return fleetOwner;
 }
 
+// Rename the legacy seeded admin ("Toto Admin") to the current title. Safe to
+// run on every boot: it only touches the exact old name and is a no-op after.
+export async function ensureSuperAdminName() {
+  const res = await User.updateOne(
+    { role: 'admin', name: 'Toto Admin' },
+    { $set: { name: 'Super Toto Admin' } },
+  );
+  if (res.modifiedCount) console.log('[seed] renamed admin to "Super Toto Admin"');
+}
+
 export async function seedIfEmpty(mongoServer) {
+  await ensureSuperAdminName();
   const count = await User.countDocuments();
   if (count > 0) {
     console.log(`[seed] database already has ${count} users, skipping seed`);
@@ -337,6 +348,7 @@ if (process.argv[1]?.endsWith('seed.js')) {
   } else {
     console.log(`[seed] database already has ${count} users, skipping`);
   }
+  await ensureSuperAdminName();
   await ensureDemoFleetOwner();
   await stopDB();
 }
