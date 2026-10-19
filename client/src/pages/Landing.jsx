@@ -36,6 +36,10 @@ export default function Landing() {
   }, []);
 
   const bookRide = '/ride';
+  const dashboardFor = (role) =>
+    role === 'admin' ? '/admin' : role === 'fleet_owner' ? '/fleet' : role === 'driver' ? '/driver' : '/ride';
+  const heroTo = user ? dashboardFor(user.role) : bookRide;
+  const heroLabel = user ? t('landing.goToDashboard') : t('landing.bookRide');
   const helplinePhone = contact.helplinePhone || DEFAULT_HELPLINE;
   const helplineLabel = contact.helplineLabel || t('nav.helpline');
   const showHelpline = contact.showHelpline !== false && !!helplinePhone;
@@ -103,8 +107,8 @@ export default function Landing() {
         <p>{t('landing.heroSub')}</p>
 
         <div className="hero-btns" data-tt="landing-cta">
-          <Link to="/ride" className="btn btn-primary btn-lg">
-            {t('landing.bookRide')}
+          <Link to={heroTo} className="btn btn-primary btn-lg">
+            {heroLabel}
           </Link>
         </div>
         {!user && (

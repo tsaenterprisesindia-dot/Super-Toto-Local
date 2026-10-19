@@ -13,6 +13,7 @@ const SUSPEND_DURATIONS = [
 export default function AdminDrivers() {
   const [drivers, setDrivers] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [msg, setMsg] = useState('');
 
@@ -149,6 +150,7 @@ export default function AdminDrivers() {
   };
 
   const clearWarnings = async (userId) => {
+    if (!window.confirm('Clear all warnings for this driver? This cannot be undone.')) return;
     setBusyId(userId); setMsg('');
     try {
       await client.delete(`/admin/warnings/${userId}`);
@@ -164,6 +166,14 @@ export default function AdminDrivers() {
     ? new Date(d.suspension.until).toLocaleDateString('en-IN')
     : null;
   const warnCount = (d) => (d.warnings || []).length;
+
+  // Amount the server will block a suspension on: riders owe `totalOutstanding`,
+  // drivers are owed `pendingPayout` (= user.earnings). Matches the server gate.
+  const suspOutstanding = suspFinance && !suspFinance.error
+    ? (suspFinance.role === 'rider' ? (suspFinance.totalOutstanding || 0) : (suspFinance.pendingPayout || 0))
+    : 0;
+
+  const DOC_SHORT = { aadhaar: 'Aadhaar', rc: 'RC', license: 'License', bank: 'Bank', photo: 'Photo', insurance: 'Insurance', puc: 'PUC', pcc: 'PCC' };
 
   const docStatus = (d, type) => (d.documents || []).find((x) => x.type === type)?.status || null;
 
@@ -185,14 +195,20 @@ export default function AdminDrivers() {
   };
 
   const filtered = drivers.filter((d) => {
-    if (filter === 'hidden') return d.isHidden;
-    if (filter === 'active') return !d.isHidden && !suspended(d);
-    if (filter === 'suspended') return suspended(d);
+    if (filter === 'hidden' && !d.isHidden) return false;
+    if (filter === 'active' && (d.isHidden || suspended(d))) return false;
+    if (filter === 'suspended' && !suspended(d)) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const hay = [d.name, d.email, d.phone, d.vehicleType, d.vehicleNumber].filter(Boolean).join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
     return true;
   });
 
   const hiddenCount = drivers.filter((d) => d.isHidden).length;
   const suspCount = drivers.filter((d) => suspended(d)).length;
+  const activeCount = drivers.filter((d) => !d.isHidden && !suspended(d)).length;
 
   return (
     <div className="fade-in">
@@ -202,8 +218,16 @@ export default function AdminDrivers() {
       </div>
       {msg && <div className="alert alert-green mb">{msg}</div>}
 
+      <input
+        className="input"
+        placeholder="Search name, phone, email or vehicle…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ maxWidth: 360, marginBottom: 10 }}
+      />
+
       <div className="tab-row" style={{ maxWidth: 480 }}>
-        {[['all', `All (${drivers.length})`], ['active', `Active (${drivers.length - hiddenCount - suspCount})`], ['hidden', `Hidden (${hiddenCount})`], ['suspended', `Suspended (${suspCount})`]].map(([k, label]) => (
+        {[['all', `All (${drivers.length})`], ['active', `Active (${activeCount})`], ['hidden', `Hidden (${hiddenCount})`], ['suspended', `Suspended (${suspCount})`]].map(([k, label]) => (
           <button key={k} className={`tab${filter === k ? ' active' : ''}`} onClick={() => setFilter(k)}>{label}</button>
         ))}
       </div>
@@ -242,7 +266,9 @@ export default function AdminDrivers() {
                     ) : (
                       <span className="muted small">No docs</span>
                     )}
-                    <div className="row wrap" style={{ gap: 2 }}>{docBadge(d, 'pcc', 'PCC')}</div>
+                    <div className="row wrap" style={{ gap: 2 }}>
+                      {(d.documents || []).map((doc) => docBadge(d, doc.type, DOC_SHORT[doc.type] || doc.type))}
+                    </div>
                     {d.aadhaarNumber && <div className="small muted" style={{ marginTop: 2 }}>Aadhaar: {formatAadhaar(d.aadhaarNumber)}</div>}
                   </td>
                   <td>
@@ -351,31 +377,42 @@ export default function AdminDrivers() {
         {suspFinance && !suspFinance.error && (
           <div className="card" style={{ background: 'var(--bg)', padding: 12, marginTop: 8 }}>
             <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Financial Summary</div>
-            <div className="spread mb"><span className="muted">Completed rides</span><b>{suspFinance.completedRides || 0}</b></div>
-            <div className="spread mb"><span className="muted">Total earned</span><b>₹{(suspFinance.totalEarned || 0).toLocaleString('en-IN')}</b></div>
-            <div className="spread mb"><span className="muted">Platform commission</span><b>₹{(suspFinance.totalCommission || 0).toLocaleString('en-IN')}</b></div>
-            <div className="spread mb"><span className="muted">Wallet balance (pending payout)</span><b style={{ color: suspFinance.pendingPayout > 0 ? 'var(--amber)' : undefined }}>₹{(suspFinance.pendingPayout || 0).toLocaleString('en-IN')}</b></div>
-            {suspFinance.pendingPayout > 0 && (
+            {suspFinance.role === 'rider' ? (
+              <>
+                <div className="spread mb"><span className="muted">Outstanding rides</span><b>{suspFinance.outstandingRides || 0}</b></div>
+                <div className="spread mb"><span className="muted">Total outstanding</span><b style={{ color: suspOutstanding > 0 ? 'var(--amber)' : undefined }}>₹{(suspFinance.totalOutstanding || 0).toLocaleString('en-IN')}</b></div>
+                <div className="spread mb"><span className="muted">Total spent</span><b>₹{(suspFinance.totalSpent || 0).toLocaleString('en-IN')}</b></div>
+              </>
+            ) : (
+              <>
+                <div className="spread mb"><span className="muted">Completed rides</span><b>{suspFinance.completedRides || 0}</b></div>
+                <div className="spread mb"><span className="muted">Total earned</span><b>₹{(suspFinance.totalEarned || 0).toLocaleString('en-IN')}</b></div>
+                <div className="spread mb"><span className="muted">Platform commission</span><b>₹{(suspFinance.totalCommission || 0).toLocaleString('en-IN')}</b></div>
+                <div className="spread mb"><span className="muted">Wallet balance (pending payout)</span><b style={{ color: suspOutstanding > 0 ? 'var(--amber)' : undefined }}>₹{(suspFinance.pendingPayout || 0).toLocaleString('en-IN')}</b></div>
+              </>
+            )}
+            {suspOutstanding > 0 && (
               <div className="alert alert-warn" style={{ marginTop: 6 }}>
-                This driver has a pending payout of <b>₹{suspFinance.pendingPayout.toLocaleString('en-IN')}</b>.
-                Ensure the payout is processed before permanent suspension.
+                {suspFinance.role === 'rider'
+                  ? <>This user has outstanding dues of <b>₹{suspOutstanding.toLocaleString('en-IN')}</b>. Confirm settlement before suspending.</>
+                  : <>This driver has a pending payout of <b>₹{suspOutstanding.toLocaleString('en-IN')}</b>. Ensure the payout is processed before suspension.</>}
               </div>
             )}
           </div>
         )}
         {suspFinance?.error && <p className="small muted mt">Could not load financial summary.</p>}
 
-        {suspFinance && !suspFinance.error && suspFinance.pendingPayout > 0 && (
+        {suspFinance && !suspFinance.error && suspOutstanding > 0 && (
           <label className="row mt" style={{ gap: 8, cursor: 'pointer', alignItems: 'flex-start' }}>
             <input type="checkbox" checked={settlementConfirmed} onChange={(e) => setSettlementConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
-            <span className="small">I confirm all financial matters (pending payout of ₹{suspFinance.pendingPayout.toLocaleString('en-IN')}) have been settled or will be handled separately.</span>
+            <span className="small">I confirm all financial matters (₹{suspOutstanding.toLocaleString('en-IN')}) have been settled or will be handled separately.</span>
           </label>
         )}
 
         <div className="modal-actions">
           <button
             className="btn btn-danger"
-            disabled={busyId === suspTarget?._id || (suspFinance && !suspFinance.error && suspFinance.pendingPayout > 0 && !settlementConfirmed)}
+            disabled={busyId === suspTarget?._id || (suspFinance && !suspFinance.error && suspOutstanding > 0 && !settlementConfirmed)}
             onClick={issueSuspend}
           >
             {busyId === suspTarget?._id ? 'Suspending…' : 'Confirm Suspension'}

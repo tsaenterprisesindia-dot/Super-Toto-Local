@@ -63,8 +63,9 @@ function Protected({ children, roles }) {
   if (roles && !roles.includes(user.role)) {
     return <Navigate to={user.role === 'driver' ? '/driver' : user.role === 'admin' ? '/admin' : user.role === 'fleet_owner' ? '/fleet' : '/'} replace />;
   }
-  // Terms gate: non-admin users must accept T&C before accessing main features.
-  if (user.role !== 'admin' && !user.termsAcceptedAt) {
+  // Terms gate: riders and drivers must accept T&C before main features.
+  // Fleet owners and admins have no rider/driver terms page to land on.
+  if (user.role !== 'admin' && user.role !== 'fleet_owner' && !user.termsAcceptedAt) {
     const termsPath = user.role === 'driver' ? '/terms/driver' : '/terms/rider';
     if (typeof window !== 'undefined' && window.location.pathname === termsPath) return children;
     return <Navigate to={termsPath} replace />;
@@ -231,21 +232,23 @@ export default function App() {
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="state-fares" element={<AdminStateFares />} />
         <Route path="ambulances" element={<AdminAmbulances />} />
+        <Route path="fleet" element={<AdminFleet />} />
         <Route path="settings" element={<AdminSettings />} />
       </Route>
       <Route
         path="/profile"
         element={
-          <Protected roles={['rider', 'driver', 'admin']}>
+          <Protected roles={['rider', 'driver', 'fleet_owner', 'admin']}>
             <Profile />
           </Protected>
         }
       />
+
+      <Route path="/fleet" element={<Protected roles={['fleet_owner']}><FleetDashboard /></Protected>} />
+      <Route path="/fleet/vehicles" element={<Protected roles={['fleet_owner']}><FleetVehicles /></Protected>} />
+      <Route path="/fleet/drivers" element={<Protected roles={['fleet_owner']}><FleetDrivers /></Protected>} />
+
       <Route path="*" element={<Navigate to="/" replace />} />
-          <Route path="/fleet" element={<Protected roles={['fleet_owner']}><FleetDashboard/></Protected>}/>
-      <Route path="/fleet/vehicles" element={<Protected roles={['fleet_owner']}><FleetVehicles/></Protected>}/>
-      <Route path="/fleet/drivers" element={<Protected roles={['fleet_owner']}><FleetDrivers/></Protected>}/>    
-      <Route path='/admin/fleet' element={<Protected roles={['admin']}><AdminFleet/></Protected>}/>
     </Routes>
     <GlobalChat />
     </>

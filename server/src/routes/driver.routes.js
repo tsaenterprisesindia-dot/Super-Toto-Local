@@ -176,6 +176,10 @@ export default function driverRoutes(io) {
         ride.status = 'assigned';
         ride.acceptedAt = new Date();
         ride.pendingDrivers = [];
+        // Fleet payout routing: when the accepting driver belongs to a fleet, the
+        // platform share is settled with the fleet owner rather than the driver.
+        ride.fleetOwnerId = req.userDoc?.fleetOwnerId || null;
+        ride.payoutEntity = req.userDoc?.fleetOwnerId ? 'fleet_owner' : 'driver';
 
         // Seat-based shared trip: the real capacity is the driver's vehicle,
         // so absorb it (never below seats already booked) and re-price per seat.

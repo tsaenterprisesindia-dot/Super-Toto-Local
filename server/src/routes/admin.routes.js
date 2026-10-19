@@ -863,13 +863,38 @@ export default function adminRoutes(io) {
   });
 
   // Fleet management for admin
+  // Minimal, non-sensitive projections so no extra personal data reaches the browser.
+  const fleetOwnerDTO = (u) => ({
+    _id: u._id,
+    name: u.name,
+    email: u.email || '',
+    phone: u.phone || '',
+    fleetStatus: u.fleetStatus,
+    fleetInviteCode: u.fleetInviteCode || null,
+    createdAt: u.createdAt,
+  });
+  const fleetDriverDTO = (u) => ({
+    _id: u._id,
+    name: u.name,
+    phone: u.phone || '',
+    driverStatus: u.driverStatus,
+    isOnline: !!u.isOnline,
+    isHidden: !!u.isHidden,
+    suspended: !!u.suspension?.active,
+    suspensionUntil: u.suspension?.until || null,
+    assignedVehicleId: u.assignedVehicleId || null,
+    vehicleType: u.vehicleType || '',
+    vehicleNumber: u.vehicleNumber || '',
+    createdAt: u.createdAt,
+  });
+
   router.get('/fleet-owners', async (_req, res, next) => {
     try {
       const owners = await User.find({ role: 'fleet_owner' })
-        .select('-password -resetCode -resetExpires -faceDescriptor')
+        .select('name email phone fleetStatus fleetInviteCode createdAt')
         .sort({ createdAt: -1 })
         .lean();
-      res.json({ owners });
+      res.json({ owners: owners.map(fleetOwnerDTO) });
     } catch (err) {
       next(err);
     }
@@ -887,10 +912,10 @@ export default function adminRoutes(io) {
   router.get('/fleet-owners/:id/drivers', async (req, res, next) => {
     try {
       const drivers = await User.find({ fleetOwnerId: req.params.id, role: 'driver' })
-        .select('-password -resetCode -resetExpires -faceDescriptor')
+        .select('name phone driverStatus isOnline isHidden suspension assignedVehicleId vehicleType vehicleNumber createdAt')
         .sort({ createdAt: -1 })
         .lean();
-      res.json({ drivers });
+      res.json({ drivers: drivers.map(fleetDriverDTO) });
     } catch (err) {
       next(err);
     }
@@ -900,7 +925,7 @@ export default function adminRoutes(io) {
     try {
       const [owners, vehicles, drivers] = await Promise.all([
         User.countDocuments({ role: 'fleet_owner' }),
-        Vehicle.countDocuments({}),
+        Vehicle.countDocuments({ fleetOwnerId: { $ne: null } }),
         User.countDocuments({ role: 'driver', fleetOwnerId: { $ne: null } }),
       ]);
       res.json({ overview: { owners, vehicles, drivers } });

@@ -1,5 +1,7 @@
 ﻿import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import client from '../../api/client.js';
+import Nav from '../../components/Nav.jsx';
 
 export default function FleetVehicles() {
   const [vehicles, setVehicles] = useState([]);
@@ -28,9 +30,14 @@ export default function FleetVehicles() {
   };
 
   return (
-    <div className="container">
+    <>
+      <Nav />
+      <div className="page">
       <div className="card">
-        <h2>Fleet Vehicles</h2>
+        <div className="spread">
+          <h2 style={{ marginTop: 0 }}>Fleet Vehicles</h2>
+          <Link to="/fleet" className="btn btn-ghost small">← Dashboard</Link>
+        </div>
         {err && <div className="err-box">{err}</div>}
         {msg && <div className="alert alert-green">{msg}</div>}
         <form onSubmit={submit} style={{display:'flex',gap:8,flexWrap:'wrap',marginTop:12}}>
@@ -46,6 +53,7 @@ export default function FleetVehicles() {
           <button className="btn btn-primary" disabled={busy}>{busy?'Adding...':'Add Vehicle'}</button>
         </form>
         <div style={{marginTop:16}}>
+          {!vehicles.length && <p className="muted small">No vehicles yet. Add your first vehicle above.</p>}
           {vehicles.map(v=>(
             <div key={v._id||v.id} className="card" style={{padding:10,marginBottom:8}}>
               <b>{v.vehicleNumber}</b> · {v.vehicleType} · {v.status}
@@ -53,6 +61,7 @@ export default function FleetVehicles() {
           ))}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

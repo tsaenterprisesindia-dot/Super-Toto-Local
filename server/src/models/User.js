@@ -63,6 +63,10 @@ const userSchema = new mongoose.Schema(
       enum: ['pending', 'approved', 'blocked'],
       default: 'pending',
     },
+    // Fleet invite code (fleet owners only): a driver enters this code to join the
+    // fleet (sets their fleetOwnerId). Absent for anyone who has not generated one,
+    // so the sparse unique index tolerates the many documents without the field.
+    fleetInviteCode: { type: String, uppercase: true, trim: true },
 
     // Rider identity verification
     aadhaarNumber: { type: String, default: '' },
@@ -175,6 +179,8 @@ userSchema.methods.toSafeJSON = function toSafeJSON() {
   delete obj.faceDescriptor; // biometric data never leaves the server
   return obj;
 };
+
+userSchema.index({ fleetInviteCode: 1 }, { unique: true, sparse: true });
 
 const User = mongoose.model('User', userSchema);
 export default User;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Nav from '../components/Nav.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -43,6 +43,49 @@ export default function Profile() {
       setErr(e.response?.data?.message || 'Could not save face');
     } finally {
       setEnrollBusy(false);
+    }
+  };
+
+  const [fleet, setFleet] = useState(undefined); // undefined=loading, null=not in a fleet
+  const [fleetCode, setFleetCode] = useState('');
+  const [fleetBusy, setFleetBusy] = useState(false);
+  const [fleetMsg, setFleetMsg] = useState('');
+  const [fleetErr, setFleetErr] = useState('');
+
+  const loadFleet = () => {
+    if (user?.role !== 'driver') return;
+    client.get('/fleet/my')
+      .then(({ data }) => setFleet(data.fleet || null))
+      .catch(() => setFleet(null));
+  };
+  useEffect(loadFleet, [user?.role]);
+
+  const joinFleet = async () => {
+    if (!fleetCode.trim()) return;
+    setFleetBusy(true); setFleetErr(''); setFleetMsg('');
+    try {
+      const { data } = await client.post('/fleet/join', { code: fleetCode.trim() });
+      setFleet(data.fleet || null);
+      setFleetCode('');
+      setFleetMsg('You have joined the fleet ✓');
+    } catch (e) {
+      setFleetErr(e.response?.data?.message || 'Could not join fleet');
+    } finally {
+      setFleetBusy(false);
+    }
+  };
+
+  const leaveFleet = async () => {
+    if (!window.confirm('Leave this fleet? Any vehicle assigned to you will be released.')) return;
+    setFleetBusy(true); setFleetErr(''); setFleetMsg('');
+    try {
+      await client.post('/fleet/leave');
+      setFleet(null);
+      setFleetMsg('You have left the fleet');
+    } catch (e) {
+      setFleetErr(e.response?.data?.message || 'Could not leave fleet');
+    } finally {
+      setFleetBusy(false);
     }
   };
 
@@ -164,7 +207,7 @@ export default function Profile() {
               </p>
             </div>
           ) : (
-            <p className="small muted mt">Face login is not available for admins.</p>
+            <p className="small muted mt">Face login is available to riders and drivers.</p>
           )}
 
           {user?.role !== 'admin' && (
@@ -204,6 +247,45 @@ export default function Profile() {
                     </button>
                   )}
                   {trainMsg && <div className="alert alert-green mt">{trainMsg}</div>}
+                </>
+              )}
+            </div>
+          )}
+
+          {user?.role === 'driver' && (
+            <div className="mt" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <h4 style={{ margin: '0 0 8px' }}>My fleet</h4>
+              {fleetErr && <div className="err-box">{fleetErr}</div>}
+              {fleetMsg && <div className="alert alert-green">{fleetMsg}</div>}
+              {fleet === undefined ? (
+                <p className="small muted">Loading…</p>
+              ) : fleet ? (
+                <>
+                  <div className="spread">
+                    <span className="muted">Fleet</span>
+                    <b>{fleet.name}</b>
+                  </div>
+                  <button className="btn btn-ghost btn-block mt" onClick={leaveFleet} disabled={fleetBusy} type="button">
+                    {fleetBusy ? 'Leaving…' : 'Leave fleet'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="small muted" style={{ marginBottom: 8 }}>
+                    Not part of a fleet. Enter the invite code from your fleet owner to join.
+                  </div>
+                  <div className="row" style={{ gap: 8 }}>
+                    <input
+                      className="input"
+                      style={{ flex: 1, textTransform: 'uppercase' }}
+                      placeholder="Invite code"
+                      value={fleetCode}
+                      onChange={(e) => setFleetCode(e.target.value.toUpperCase())}
+                    />
+                    <button className="btn btn-primary" onClick={joinFleet} disabled={fleetBusy || !fleetCode.trim()} type="button">
+                      {fleetBusy ? 'Joining…' : 'Join'}
+                    </button>
+                  </div>
                 </>
               )}
             </div>

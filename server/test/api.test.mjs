@@ -23,6 +23,7 @@ const CREDS = {
   driver: { email: 'driver@supertoto.local', password: 'Driver@Toto9' },
   admin: { email: 'admin@supertoto.local', password: 'Admin@Toto2k26' },
   ambo: { email: 'ambo@supertoto.local', password: 'Driver@Toto9' },
+  fleet: { email: 'fleet@supertoto.local', password: 'Fleet@Toto2k26' },
 };
 
 let child = null;
@@ -114,6 +115,7 @@ before(async () => {
   tokens.rider = await login('rider');
   tokens.driver = await login('driver');
   tokens.admin = await login('admin');
+  tokens.fleet = await login('fleet');
 });
 
 after(async () => {
@@ -704,4 +706,84 @@ test('ambulance expiry sweep auto-suspends expired compliant records and notifie
   assert.equal(summary.status, 200);
   assert.ok(summary.data.summary.total >= 3);
   assert.ok(summary.data.summary.suspended >= 1);
+});
+
+// ------------------------------------------------------------- fleet linking
+test('fleet owner can fetch an invite code', async () => {
+  const { status, data } = await api('GET', '/fleet/invite-code', null, tokens.fleet);
+  assert.equal(status, 200, JSON.stringify(data));
+  assert.match(data.code, /^[A-Z2-9]{8}$/);
+});
+
+test('driver joins a fleet by invite code, gets a vehicle, then leaves', async () => {
+  const code = (await api('GET', '/fleet/invite-code', null, tokens.fleet)).data.code;
+
+  // A wrong code is rejected.
+  assert.equal((await api('POST', '/fleet/join', { code: 'ZZZZZZZZ' }, tokens.driver)).status, 404);
+
+  // The demo driver starts out outside any fleet.
+  assert.equal((await api('GET', '/fleet/my', null, tokens.driver)).data.fleet, null);
+
+  // Join succeeds and is immediately visible to the driver and the owner.
+  const joined = await api('POST', '/fleet/join', { code }, tokens.driver);
+  assert.equal(joined.status, 200, JSON.stringify(joined.data));
+  assert.equal(joined.data.fleet.name, 'Fleet Owner Demo');
+  assert.equal((await api('GET', '/fleet/my', null, tokens.driver)).data.fleet.name, 'Fleet Owner Demo');
+
+  // A driver cannot join a second fleet.
+  assert.equal((await api('POST', '/fleet/join', { code }, tokens.driver)).status, 400);
+
+  // The owner now sees the driver.
+  const list = await api('GET', '/fleet/drivers', null, tokens.fleet);
+  assert.equal(list.status, 200);
+  const me = list.data.drivers.find((d) => d.name === 'Bikash Sharma');
+  assert.ok(me, 'joined driver appears in the fleet list');
+
+  // Create a vehicle for the fleet and assign it to the driver.
+  const created = await api('POST', '/fleet/vehicles', { vehicleType: 'toto', vehicleNumber: 'SK-FLEET-1' }, tokens.fleet);
+  assert.equal(created.status, 201, JSON.stringify(created.data));
+  const vehicleId = created.data.vehicle._id;
+
+  assert.equal((await api('POST', '/fleet/assign', { driverId: me._id, vehicleId }, tokens.fleet)).status, 200);
+  const assigned = (await api('GET', '/fleet/vehicles', null, tokens.fleet)).data.vehicles.find((v) => v._id === vehicleId);
+  assert.equal(assigned.status, 'assigned');
+  assert.equal(String(assigned.assignedDriverId), String(me._id));
+
+  // Assigning the same vehicle to another driver is blocked — use the ambulance
+  // driver as a second fleet member to prove the guard.
+  await api('POST', '/fleet/join', { code }, tokens.ambo);
+  const list2 = await api('GET', '/fleet/drivers', null, tokens.fleet);
+  const other = list2.data.drivers.find((d) => d.name !== 'Bikash Sharma');
+  assert.ok(other, 'a second driver can join');
+  const clash = await api('POST', '/fleet/assign', { driverId: other._id, vehicleId }, tokens.fleet);
+  assert.equal(clash.status, 409, JSON.stringify(clash.data));
+
+  // Unassign returns the vehicle to idle.
+  assert.equal((await api('POST', '/fleet/unassign', { driverId: me._id }, tokens.fleet)).status, 200);
+  assert.equal(
+    (await api('GET', '/fleet/vehicles', null, tokens.fleet)).data.vehicles.find((v) => v._id === vehicleId).status,
+    'idle',
+  );
+
+  // Leaving restores the fleet-less state for both drivers.
+  assert.equal((await api('POST', '/fleet/leave', {}, tokens.driver)).status, 200);
+  assert.equal((await api('GET', '/fleet/my', null, tokens.driver)).data.fleet, null);
+  assert.equal((await api('POST', '/fleet/leave', {}, tokens.ambo)).status, 200);
+});
+
+test('admin fleet endpoints expose owners, detail and overview', async () => {
+  const owners = await api('GET', '/admin/fleet-owners', null, tokens.admin);
+  assert.equal(owners.status, 200);
+  const demo = owners.data.owners.find((o) => o.email === 'fleet@supertoto.local');
+  assert.ok(demo, 'demo fleet owner is listed');
+  assert.equal(demo.fleetStatus, 'approved');
+  assert.ok(demo._id, 'owner DTO carries an id');
+
+  const drivers = await api('GET', `/admin/fleet-owners/${demo._id}/drivers`, null, tokens.admin);
+  assert.equal(drivers.status, 200);
+  assert.ok(Array.isArray(drivers.data.drivers));
+
+  const overview = await api('GET', '/admin/fleet-overview', null, tokens.admin);
+  assert.equal(overview.status, 200);
+  assert.ok(overview.data.overview.owners >= 1);
 });
