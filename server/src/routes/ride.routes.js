@@ -95,10 +95,10 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   // mistaken for an emergency or a granted consent.
   const truthy = (v) => v === true || v === 1 || String(v).trim().toLowerCase() === 'true';
   const isEmergency = truthy(emergency);
-  // Ambulance trips are whole-vehicle service calls — no seat booking, ever.
+  // Ambulance trips are whole-vehicle service calls — no seat booking, never shared.
   let seatCfg = await getSeatBookingConfig();
   if (isAmbulance) seatCfg = { mode: 'off', message: '' };
-  const cfgSeatMode = SEAT_MODES.includes(seatCfg.mode) ? seatCfg.mode : 'shared';
+  const cfgSeatMode = isAmbulance ? 'off' : (SEAT_MODES.includes(seatCfg.mode) ? seatCfg.mode : 'shared');
   // The rider may pick 'reserved' (whole vehicle) vs 'shared' (per-seat) at
   // booking time. The admin config stays the default; when the operator has
   // disabled seat booking ('off'), the rider's choice is ignored.
@@ -107,11 +107,11 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   if (cfgSeatMode !== 'off' && SEAT_MODES.includes(want)) {
     seatMode = want;
   }
-  const reserved = seatMode === 'reserved';
-  const seatsEnabled = seatMode !== 'off';
+  const reserved = isAmbulance ? false : seatMode === 'reserved';
+  const seatsEnabled = isAmbulance ? false : seatMode !== 'off';
   const nominalSeats = Math.max(1, Math.round(Number(vtRates[vtId]?.seatCount) || Number(cfg.seatCount) || 1));
   const seatCount = seatsEnabled ? nominalSeats : 1;
-  const requested = Math.max(1, Math.round(Number(seats) || 1));
+  const requested = isAmbulance ? 1 : Math.max(1, Math.round(Number(seats) || 1));
   const bookedSeats = !seatsEnabled ? 1 : reserved ? seatCount : Math.min(requested, seatCount);
   // Declared passenger mix (adults + children). When the rider doesn't state a
   // breakdown we keep the previous behaviour (adults = booked seats, no children).
@@ -136,8 +136,8 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   const compliance = await getComplianceConfig();
   const surgeCap = farePolicy?.surgeCap ?? compliance.surgeCap;
   if (surgeCap > 0) surge = Math.min(surge, surgeCap);
-  // Emergency ambulance calls always bill at base fare — no surge, ever.
-  if (isAmbulance && isEmergency) surge = 1;
+  // Ambulance calls always bill at base fare — no surge, ever.
+  if (isAmbulance) surge = 1;
   if (farePolicy?.cancellationFee != null) cfg.cancellationFee = farePolicy.cancellationFee;
   else if (compliance.cancellationFee != null) cfg.cancellationFee = compliance.cancellationFee;
   // Automatic GST split: compare operator's registered state with the trip state.
@@ -202,11 +202,15 @@ async function computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, st
   };
 }
 
-// A rider may not be the creator of OR a seat-holder on another active trip.
+// Allow riders to book multiple vehicles concurrently (e.g. large groups).
 async function activeRideFor(userId) {
+  // Block only if the user is already an occupant on someone else's active trip
+  // (prevents joining another shared trip while already on one). Allow primary
+  // riders to create additional rides for different vehicles/groups.
   return Ride.findOne({
     status: { $in: ACTIVE_RIDER_STATUSES },
-    $or: [{ rider: userId }, { 'occupants.rider': userId }],
+    'occupants.rider': userId,
+    rider: { $ne: userId },
   });
 }
 
@@ -293,7 +297,7 @@ export default function rideRoutes(io) {
       }
       const active = await activeRideFor(req.user.id);
       if (active) {
-        return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
+        return res.status(409).json({ message: 'You already have a seat on another active shared trip', rideId: active._id });
       }
 
       const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, category, ambulanceType, emergency, patientConsent, waitingAtPickup, adults, children });
@@ -389,7 +393,7 @@ export default function rideRoutes(io) {
       }
       const active = await activeRideFor(req.user.id);
       if (active) {
-        return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
+        return res.status(409).json({ message: 'You already have a seat on another active shared trip', rideId: active._id });
       }
 
       const c = await computeSharedTrip({ pickup, drop, luggage, seats, vehicleType, stateCode: state, mode: req.body.mode, adults, children });
@@ -583,7 +587,7 @@ export default function rideRoutes(io) {
 
       const active = await activeRideFor(req.user.id);
       if (active) {
-        return res.status(409).json({ message: 'You already have an active ride or a booked seat', rideId: active._id });
+        return res.status(409).json({ message: 'You already have a seat on another active shared trip', rideId: active._id });
       }
 
       const seatCount = ride.shared.seatCount || 1;

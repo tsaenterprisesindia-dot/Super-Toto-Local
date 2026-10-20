@@ -225,16 +225,17 @@ test('book shared prices only the booked seats', async () => {
   await api('POST', `/rides/${ride._id}/cancel`, {}, tokens.rider);
 });
 
-test('a rider cannot hold two active rides', async () => {
+test('a rider can book multiple vehicles concurrently', async () => {
   const first = await api('POST', '/rides', {
     pickup: PICKUP, drop: DROP, seats: 1, vehicleType: 'toto',
   }, tokens.rider);
   assert.equal(first.status, 201);
   const second = await api('POST', '/rides', {
-    pickup: PICKUP, drop: DROP, seats: 1, vehicleType: 'toto',
+    pickup: PICKUP, drop: DROP, seats: 1, vehicleType: 'auto',
   }, tokens.rider);
-  assert.equal(second.status, 409);
+  assert.equal(second.status, 201);
   await api('POST', `/rides/${first.data.ride._id}/cancel`, {}, tokens.rider);
+  await api('POST', `/rides/${second.data.ride._id}/cancel`, {}, tokens.rider);
 });
 
 test('reserve endpoint holds a ride until unreserved', async () => {

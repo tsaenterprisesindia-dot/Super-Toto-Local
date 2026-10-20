@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import client from '../api/client.js';
 import Nav from '../components/Nav.jsx';
@@ -45,6 +45,7 @@ function SeatMap({ seatCount, taken = 0, mySeats = 0, reserved = false }) {
 }
 
 export default function RiderHome() {
+  const [searchParams] = useSearchParams();
   const { socket } = useSocket();
   const { t, i18n } = useTranslation();
   const [ride, setRide] = useState(null);
@@ -157,9 +158,16 @@ export default function RiderHome() {
       .then(({ data }) => setStateList(data.states || []))
       .catch(() => {});
     client.get('/ambulance/availability')
-      .then(({ data }) => setAmbulanceCfg(data))
+      .then(({ data }) => {
+        setAmbulanceCfg(data);
+        const wantAmb = (searchParams.get('ambulance') === '1' || searchParams.get('category') === 'ambulance');
+        if (wantAmb && (data?.vehicleTypes || []).length > 0) {
+          const pref = (data.vehicleTypes[0] || {}).id;
+          if (pref) setVehicleType(pref);
+        }
+      })
       .catch(() => {});
-  }, []);
+  }, [searchParams]);
 
   const refreshActive = useCallback(async () => {
     try {

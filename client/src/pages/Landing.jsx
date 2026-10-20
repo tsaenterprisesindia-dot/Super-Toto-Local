@@ -127,7 +127,7 @@ export default function Landing() {
             <span className="small">{t('landing.emergencyNote')}</span>
           </div>
           <div className="emergency-actions">
-            <Link to={bookRide} className="btn btn-danger">
+            <Link to={`${bookRide}?ambulance=1`} className="btn btn-danger">
               {t('landing.ambulanceCta')}
             </Link>
             <a href="tel:108" className="btn btn-ghost">

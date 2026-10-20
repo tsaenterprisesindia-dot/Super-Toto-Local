@@ -10,6 +10,9 @@ export default function FleetDashboard() {
   const [err, setErr] = useState('');
   const [me, setMe] = useState(null);
 
+  const [earnings, setEarnings] = useState(null);
+  const [readiness, setReadiness] = useState([]);
+
   const load = () => {
     client.get('/fleet/invite-code')
       .then(({ data }) => setCode(data.code || ''))
@@ -17,6 +20,8 @@ export default function FleetDashboard() {
     client.get('/auth/me')
       .then(({ data }) => setMe(data.user))
       .catch(() => {});
+    client.get('/fleet/earnings').then(({ data }) => setEarnings(data)).catch(() => {});
+    client.get('/fleet/ambulance-readiness').then(({ data }) => setReadiness(data.states || [])).catch(() => {});
   };
   useEffect(load, []);
 
@@ -53,9 +58,10 @@ export default function FleetDashboard() {
       <div className="card">
         <h2 style={{ marginTop: 0 }}>Fleet Owner Dashboard</h2>
         <p className="muted">Manage vehicles and drivers under your fleet.</p>
-        <div className="row" style={{ gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
+          <div className="row" style={{ gap: 12, marginTop: 16, flexWrap: 'wrap' }}>
           <Link to="/fleet/vehicles" className="btn btn-primary">Manage Vehicles</Link>
           <Link to="/fleet/drivers" className="btn btn-ghost">Manage Drivers</Link>
+          <Link to="/fleet/drivers" className="btn btn-ghost">Ambulance Readiness</Link>
         </div>
       </div>
 
@@ -75,6 +81,17 @@ export default function FleetDashboard() {
             <div className="lbl">Paid out</div>
           </div>
         </div>
+        {earnings && (earnings.ambulanceTotal || earnings.taxiTotal) && (
+          <div style={{ marginTop: 10 }}>
+            <b className="small">Breakdown</b>
+            <div className="stats-grid" style={{ marginTop: 8 }}>
+              <div className="card stat"><div className="num">{earnings.ambulanceCount || 0}</div><div className="lbl">Ambulance trips</div></div>
+              <div className="card stat"><div className="num">{inr(earnings.ambulanceTotal)}</div><div className="lbl">Ambulance earnings</div></div>
+              <div className="card stat"><div className="num">{earnings.taxiCount || 0}</div><div className="lbl">Taxi trips</div></div>
+              <div className="card stat"><div className="num">{inr(earnings.taxiTotal)}</div><div className="lbl">Taxi earnings</div></div>
+            </div>
+          </div>
+        )}
         <p className="small muted" style={{ marginBottom: 0 }}>
           Earnings from rides run on your fleet's vehicles accrue to you. Admin settles payouts; settled payouts
           appear here automatically.
@@ -91,6 +108,20 @@ export default function FleetDashboard() {
           </div>
         )}
       </div>
+
+      {readiness.length > 0 && (
+        <div className="card mt">
+          <h3 style={{ marginTop: 0 }}>Ambulance readiness (by state)</h3>
+          <div className="stats-grid">
+            {readiness.slice(0, 6).map((s) => (
+              <div key={s.stateCode} className="card stat">
+                <div className="num">{s.bls} BLS / {s.als} ALS</div>
+                <div className="lbl">{s.stateName || s.stateCode}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="card mt">
         <h3 style={{ marginTop: 0 }}>Fleet invite code</h3>
