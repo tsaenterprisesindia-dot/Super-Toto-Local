@@ -1,0 +1,39 @@
+✔ estimate defaults to the operator seat mode (shared) (4852.3929ms)
+✔ estimate reserved books the whole vehicle at the full trip fare (39.0058ms)
+✔ estimate shared prices per seat and leaves seats available (43.2583ms)
+✔ estimate ignores an unknown mode and falls back to the default (32.4454ms)
+✔ promo code discounts the estimate (34.7711ms)
+✔ estimate rejects trips outside the allowed distance range (32.6349ms)
+✔ book reserved creates a whole-vehicle ride and can be cancelled (146.2227ms)
+✔ book shared prices only the booked seats (167.4692ms)
+✔ a rider cannot hold two active rides (134.0148ms)
+✔ reserve endpoint holds a ride until unreserved (78.9857ms)
+✔ reserve whole-vehicle flow: reserved then unreserved (60.2388ms)
+✔ rider saved places CRUD (46.4916ms)
+✔ promo code is recorded on the ride at booking time (85.4035ms)
+✔ promo usage is limited per user (175.9131ms)
+✔ full ride lifecycle: book -> accept -> share+sos -> verify-face gate -> start -> complete -> wallet pay -> rate (563.0906ms)
+✔ face register rejects a malformed descriptor (15.9206ms)
+✔ auth: /me returns the authenticated user (7.5346ms)
+✔ admin stats and promos endpoints respond (48.4516ms)
+✔ notification endpoints: list, unread count, mark read, read-all (235.0932ms)
+✔ emergency helplines: public config, admin read/update, persistence (120.9949ms)
+✔ ambulance availability: public, state-aware, lists BLS/ALS units (27.2911ms)
+✔ ambulance compliance: driver submits → pending; admin approves → active (268.4073ms)
+✔ ambulance estimate: whole-trip billing, no seat booking, emergency never surges (81.7321ms)
+✔ ambulance booking: consent required, succeeds with consent, cancel (145.6076ms)
+✔ ambulance expiry sweep auto-suspends expired compliant records and notifies (129.3805ms)
+✔ route: parses a real OSRM response (3.6436ms)
+✔ route: falls back to haversine when the router errors (0.4747ms)
+✔ route: falls back when OSRM returns no route (code != Ok) (0.376ms)
+✔ route: road result is reused from cache even if the router later fails (0.5437ms)
+✔ route: fallback result is negative-cached (no repeat router hit) (0.4551ms)
+✔ route: degenerate coordinates skip the router entirely (0.3581ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7945.815
