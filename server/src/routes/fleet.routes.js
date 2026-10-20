@@ -3,6 +3,9 @@ import crypto from 'crypto';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import Vehicle from '../models/Vehicle.js';
 import User from '../models/User.js';
+import AmbulanceCompliance from '../models/AmbulanceCompliance.js';
+import Ride from '../models/Ride.js';
+import { isAmbulanceVehicle } from '../utils/pricing.js';
 
 // Ambiguous characters (0/O, 1/I) are excluded so codes are easy to read aloud.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -66,7 +69,22 @@ export default function fleetRoutes() {
         .select('name phone driverStatus isOnline isHidden suspension assignedVehicleId vehicleType vehicleNumber createdAt')
         .sort({ createdAt: -1 })
         .lean();
-      res.json({ drivers });
+      const ids = drivers.map((d) => d._id);
+      const comps = await AmbulanceCompliance.find({ driver: { $in: ids } })
+        .select('driver stateCode ambulanceType status permit fitness insurance roadTax puc drivingLicense emtCert vehicleNumber')
+        .lean();
+      const map = {};
+      for (const c of comps) {
+        const k = String(c.driver);
+        if (!map[k]) map[k] = [];
+        map[k].push(c);
+      }
+      res.json({
+        drivers: drivers.map((d) => ({
+          ...d,
+          ambulanceCompliance: map[String(d._id)] || [],
+        })),
+      });
     } catch (err) {
       next(err);
     }
@@ -161,6 +179,20 @@ export default function fleetRoutes() {
       if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
       const driver = await User.findOne({ _id: driverId, fleetOwnerId: req.user.id, role: 'driver' });
       if (!driver) return res.status(404).json({ message: 'Driver not found under fleet' });
+      // Ambulance assignment guardrail: require an active, complete compliance
+      // record for the driver that matches the vehicle's ambulance type.
+      if (isAmbulanceVehicle(vehicle.vehicleType)) {
+        const level = String(vehicle.vehicleType).toLowerCase() === 'ambulance-als' ? 'ALS' : 'BLS';
+        const comp = await AmbulanceCompliance.findOne({
+          driver: driver._id,
+          ambulanceType: level,
+        }).lean();
+        // We can't know the trip state at assignment time, but require at least
+        // one active compliance in some allowed state for this service level.
+        if (!comp || comp.status !== 'active') {
+          return res.status(400).json({ message: `This driver has no active ${level} ambulance compliance. Approve compliance before assigning an ambulance vehicle.` });
+        }
+      }
       if (vehicle.assignedDriverId && String(vehicle.assignedDriverId) !== String(driver._id)) {
         return res.status(409).json({ message: 'This vehicle is already assigned to another driver' });
       }
@@ -198,6 +230,108 @@ export default function fleetRoutes() {
       driver.assignedVehicleId = null;
       await driver.save();
       res.json({ message: 'Driver unassigned' });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Fleet trip history (for audit/support)
+  router.get('/trips', requireAuth, requireRole('fleet_owner'), async (req, res, next) => {
+    try {
+      const { category, limit = 50 } = req.query || {};
+      const q = { fleetOwnerId: req.user.id };
+      if (category) q.category = category;
+      const trips = await Ride.find(q)
+        .sort({ createdAt: -1 })
+        .limit(Math.min(Number(limit) || 50, 200))
+        .populate('driver', 'name phone')
+        .populate('rider', 'name phone')
+        .lean();
+      res.json({
+        trips: trips.map((t) => ({
+          _id: t._id,
+          status: t.status,
+          category: t.category || 'taxi',
+          ambulanceType: t.ambulanceType || '',
+          emergency: !!t.emergency,
+          patientConsent: !!t.patientConsent,
+          vehicleType: t.vehicleType,
+          driver: t.driver ? { name: t.driver.name, phone: t.driver.phone } : null,
+          rider: t.rider ? { name: t.rider.name, phone: t.rider.phone } : null,
+          pickup: t.pickup?.name,
+          drop: t.drop?.name,
+          distanceKm: t.distanceKm,
+          fare: t.fare,
+          fareBreakup: t.fareBreakup,
+          payment: t.payment,
+          createdAt: t.createdAt,
+          completedAt: t.completedAt,
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Fleet earnings breakdown by category
+  router.get('/earnings', requireAuth, requireRole('fleet_owner'), async (req, res, next) => {
+    try {
+      const rows = await Ride.aggregate([
+        { $match: { fleetOwnerId: req.user.id, status: 'completed' } },
+        {
+          $group: {
+            _id: { category: '$category', ambulanceType: '$ambulanceType' },
+            count: { $sum: 1 },
+            totalFare: { $sum: '$fare' },
+            driverEarnings: { $sum: '$fareBreakup.driverEarnings' },
+            commission: { $sum: '$fareBreakup.commission' },
+            gst: { $sum: '$fareBreakup.gst' },
+          },
+        },
+        { $sort: { count: -1 } },
+      ]);
+      const total = await Ride.aggregate([
+        { $match: { fleetOwnerId: req.user.id, status: 'completed' } },
+        { $group: { _id: null, count: { $sum: 1 }, driverEarnings: { $sum: '$fareBreakup.driverEarnings' }, totalFare: { $sum: '$fare' } } },
+      ]);
+      res.json({
+        breakdown: rows.map((r) => ({
+          category: r._id.category || 'taxi',
+          ambulanceType: r._id.ambulanceType || '',
+          count: r.count,
+          totalFare: Math.round((r.totalFare || 0) * 100) / 100,
+          driverEarnings: Math.round((r.driverEarnings || 0) * 100) / 100,
+          commission: Math.round((r.commission || 0) * 100) / 100,
+          gst: Math.round((r.gst || 0) * 100) / 100,
+        })),
+        totals: {
+          count: total[0]?.count || 0,
+          driverEarnings: Math.round((total[0]?.driverEarnings || 0) * 100) / 100,
+          totalFare: Math.round((total[0]?.totalFare || 0) * 100) / 100,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Ambulance readiness per state for this fleet
+  router.get('/ambulance-readiness', requireAuth, requireRole('fleet_owner'), async (req, res, next) => {
+    try {
+      const drivers = await User.find({ fleetOwnerId: req.user.id, role: 'driver' }).select('_id').lean();
+      const ids = drivers.map((d) => d._id);
+      const comps = await AmbulanceCompliance.find({ driver: { $in: ids } })
+        .select('driver stateCode ambulanceType status vehicleNumber')
+        .lean();
+      const byState = {};
+      for (const c of comps) {
+        const s = c.stateCode || '—';
+        if (!byState[s]) byState[s] = { stateCode: s, bls: 0, als: 0, active: 0 };
+        if (c.ambulanceType === 'BLS') byState[s].bls += 1;
+        if (c.ambulanceType === 'ALS') byState[s].als += 1;
+        if (c.status === 'active') byState[s].active += 1;
+      }
+      res.json({ readiness: Object.values(byState) });
     } catch (err) {
       next(err);
     }
