@@ -60,6 +60,19 @@ export default function AdminReports() {
             </div>
           </div>
 
+          {stats.ambulance && (
+            <div className="card mb">
+              <h3 style={{ marginTop: 0 }}>🚑 Ambulance earnings</h3>
+              <div className="stats-grid">
+                <div className="card stat"><div className="num">{stats.ambulance.total}</div><div className="lbl">Ambulance trips</div></div>
+                <div className="card stat"><div className="num" style={{ color: 'var(--amber)' }}>{formatINR(stats.ambulance.revenue)}</div><div className="lbl">Billed</div></div>
+                <div className="card stat"><div className="num" style={{ color: '#1d4ed8' }}>{formatINR(stats.ambulance.commission)}</div><div className="lbl">Platform commission</div></div>
+                <div className="card stat"><div className="num" style={{ color: '#1d4ed8' }}>{formatINR(stats.ambulance.gst)}</div><div className="lbl">GST collected</div></div>
+                <div className="card stat"><div className="num" style={{ color: 'var(--brand-dark)' }}>{formatINR(stats.ambulance.driverEarnings)}</div><div className="lbl">Driver/Fleet payouts</div></div>
+              </div>
+            </div>
+          )}
+
           <h3 style={{ margin: '0 0 12px' }}>Payment methods</h3>
           <div className="stats-grid mb">
             {(['UPI', 'Cash', 'Card']).map((m) => (

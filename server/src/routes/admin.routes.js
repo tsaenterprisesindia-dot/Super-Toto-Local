@@ -22,7 +22,7 @@ export default function adminRoutes(io) {
 
   router.get('/stats', async (_req, res, next) => {
     try {
-      const [riders, drivers, hiddenRiders, hiddenDrivers, suspendedRiders, suspendedDrivers, rides, online, completed, cancelled, methods, collected] =
+      const [riders, drivers, hiddenRiders, hiddenDrivers, suspendedRiders, suspendedDrivers, rides, online, completed, cancelled, methods, collected, ambulanceAgg] =
         await Promise.all([
           User.countDocuments({ role: 'rider' }),
           User.countDocuments({ role: 'driver' }),
@@ -40,6 +40,19 @@ export default function adminRoutes(io) {
                 revenue: { $sum: '$fare' },
                 paid: { $sum: { $cond: [{ $eq: ['$payment.status', 'paid'] }, '$fare', 0] } },
                 avgFare: { $avg: '$fare' },
+                commission: { $sum: '$fareBreakup.commission' },
+                gst: { $sum: '$fareBreakup.gst' },
+                driverEarnings: { $sum: '$fareBreakup.driverEarnings' },
+              },
+            },
+          ]),
+          Ride.aggregate([
+            { $match: { status: 'completed', category: 'ambulance' } },
+            {
+              $group: {
+                _id: '$ambulanceType',
+                count: { $sum: 1 },
+                revenue: { $sum: '$fare' },
                 commission: { $sum: '$fareBreakup.commission' },
                 gst: { $sum: '$fareBreakup.gst' },
                 driverEarnings: { $sum: '$fareBreakup.driverEarnings' },
@@ -133,6 +146,14 @@ export default function adminRoutes(io) {
           outstanding: collected[0]?.outstanding || 0,
           pendingCount: collected[0]?.pendingCount || 0,
           methods: methodBreakdown,
+          ambulance: {
+            total: ambulanceAgg.reduce((s, r) => s + (r.count || 0), 0),
+            revenue: ambulanceAgg.reduce((s, r) => s + (r.revenue || 0), 0),
+            commission: ambulanceAgg.reduce((s, r) => s + (r.commission || 0), 0),
+            gst: ambulanceAgg.reduce((s, r) => s + (r.gst || 0), 0),
+            driverEarnings: ambulanceAgg.reduce((s, r) => s + (r.driverEarnings || 0), 0),
+            byType: Object.fromEntries(ambulanceAgg.map((r) => [r._id || 'BLS', r])),
+          },
         },
       });
     } catch (err) {

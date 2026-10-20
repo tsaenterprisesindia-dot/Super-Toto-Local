@@ -1,0 +1,45 @@
+✔ estimate defaults to the operator seat mode (shared) (5042.085ms)
+✔ estimate reserved books the whole vehicle at the full trip fare (38.62ms)
+✔ estimate shared prices per seat and leaves seats available (35.2423ms)
+✔ estimate ignores an unknown mode and falls back to the default (29.9584ms)
+✔ promo code discounts the estimate (37.4052ms)
+✔ estimate rejects trips outside the allowed distance range (27.3958ms)
+✔ book reserved creates a whole-vehicle ride and can be cancelled (98.8747ms)
+✔ book shared prices only the booked seats (101.5292ms)
+✔ a rider cannot hold two active rides (113.8398ms)
+✔ reserve endpoint holds a ride until unreserved (76.125ms)
+✔ reserve whole-vehicle flow: reserved then unreserved (77.0538ms)
+✔ rider saved places CRUD (63.8872ms)
+✔ promo code is recorded on the ride at booking time (119.8988ms)
+✔ promo usage is limited per user (171.7926ms)
+✔ full ride lifecycle: book -> accept -> share+sos -> verify-face gate -> start -> complete -> wallet pay -> rate (602.9021ms)
+✔ face register rejects a malformed descriptor (16.893ms)
+✔ auth: /me returns the authenticated user (17.4749ms)
+✔ admin stats and promos endpoints respond (33.3055ms)
+✔ notification endpoints: list, unread count, mark read, read-all (263.6284ms)
+✔ emergency helplines: public config, admin read/update, persistence (77.5705ms)
+✔ ambulance availability: public, state-aware, lists BLS/ALS units (30.2576ms)
+✔ ambulance compliance: driver submits → pending; admin approves → active (276.3081ms)
+✔ ambulance estimate: whole-trip billing, no seat booking, emergency never surges (78.771ms)
+✔ ambulance: whole-trip fare ignores passenger count; "false" is not consent; reserve rejected (143.9249ms)
+✔ ambulance booking: consent required, succeeds with consent, cancel (125.7837ms)
+✔ ambulance expiry sweep auto-suspends expired compliant records and notifies (143.2873ms)
+✔ payouts: driver earnings accrue to driver; fleet owner accrues for fleet rides (449.7602ms)
+✔ fleet ride earnings accrue to the fleet owner, not the driver (454.65ms)
+✔ fleet owner can fetch an invite code (14.5072ms)
+✔ driver joins a fleet by invite code, gets a vehicle, then leaves (429.4775ms)
+✔ admin fleet endpoints expose owners, detail and overview (41.6457ms)
+✔ route: parses a real OSRM response (4.917ms)
+✔ route: falls back to haversine when the router errors (0.7179ms)
+✔ route: falls back when OSRM returns no route (code != Ok) (0.5423ms)
+✔ route: road result is reused from cache even if the router later fails (0.6513ms)
+✔ route: fallback result is negative-cached (no repeat router hit) (1.2621ms)
+✔ route: degenerate coordinates skip the router entirely (0.4963ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9803.5677
