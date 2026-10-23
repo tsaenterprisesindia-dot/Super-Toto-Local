@@ -12,14 +12,31 @@ export default function AdminPromos() {
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(EMPTY);
   const [showForm, setShowForm] = useState(false);
+  const [offersCfg, setOffersCfg] = useState({ enabled: true, showInNav: true, showPromoCode: true });
+  const [cfgBusy, setCfgBusy] = useState(false);
 
   const load = useCallback(() => {
     client.get('/admin/promos').then(({ data }) => setPromos(data.promos || [])).catch(() => {});
+    client.get('/admin/offers-config').then(({ data }) => setOffersCfg(data.offersConfig || {})).catch(() => {});
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const saveCfg = async (patch) => {
+    setCfgBusy(true);
+    setErr('');
+    try {
+      const next = { ...offersCfg, ...patch };
+      const { data } = await client.put('/admin/offers-config', next);
+      setOffersCfg(data.offersConfig || next);
+    } catch (e2) {
+      setErr(e2.response?.data?.message || 'Could not update offers settings');
+    } finally {
+      setCfgBusy(false);
+    }
+  };
 
   const create = async (e) => {
     e.preventDefault();
@@ -62,6 +79,42 @@ export default function AdminPromos() {
     <div>
       <h2>Promo codes</h2>
       <p className="muted">Create discount codes riders can apply at booking. Discounts are capped and counted per user.</p>
+
+      <div className="card mb">
+        <h3 style={{ marginTop: 0 }}>Offers & Promotions</h3>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Turn the rider offers page and promo-code field on or off across the app.
+        </p>
+        <div className="stack" style={{ gap: 10 }}>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={offersCfg.enabled !== false}
+              disabled={cfgBusy}
+              onChange={(e) => saveCfg({ enabled: e.target.checked })}
+            />
+            <span><b>Enable offers & promotions</b> — shows the Offers page and applies promo codes</span>
+          </label>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={offersCfg.showInNav !== false}
+              disabled={cfgBusy || offersCfg.enabled === false}
+              onChange={(e) => saveCfg({ showInNav: e.target.checked })}
+            />
+            <span>Show <b>Offers</b> link in the navigation bar</span>
+          </label>
+          <label className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={offersCfg.showPromoCode !== false}
+              disabled={cfgBusy || offersCfg.enabled === false}
+              onChange={(e) => saveCfg({ showPromoCode: e.target.checked })}
+            />
+            <span>Show <b>promo code</b> field on the booking screen</span>
+          </label>
+        </div>
+      </div>
 
       {err && <div className="alert alert-warn mb">{err}</div>}
 
