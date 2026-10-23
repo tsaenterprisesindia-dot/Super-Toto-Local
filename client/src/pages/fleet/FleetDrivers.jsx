@@ -11,6 +11,30 @@ const driverBadge = (d) => {
   return { cls: 'badge-amber', label: 'Pending' };
 };
 
+const ambulanceBadge = (d) => {
+  const ac = Array.isArray(d.ambulanceCompliance) ? d.ambulanceCompliance : [];
+  const active = ac.find((x) => x && x.status === 'approved' && (!x.validTo || new Date(x.validTo) > new Date()));
+  const pending = ac.find((x) => x && x.status === 'pending');
+  const expired = ac.find((x) => x && x.status === 'approved' && x.validTo && new Date(x.validTo) <= new Date());
+  if (active) {
+    const state = active.state ? ` ${active.state}` : '';
+    const type = active.type ? ` ${active.type}` : '';
+    return { cls: 'badge-green', label: `Ambulance OK${type}${state}` };
+  }
+  if (pending) {
+    const state = pending.state ? ` ${pending.state}` : '';
+    return { cls: 'badge-amber', label: `Ambulance Pending${state}` };
+  }
+  if (expired) {
+    const state = expired.state ? ` ${expired.state}` : '';
+    return { cls: 'badge-red', label: `Ambulance Expired${state}` };
+  }
+  if (ac.length) {
+    return { cls: 'badge-gray', label: 'Ambulance' };
+  }
+  return null;
+};
+
 export default function FleetDrivers() {
   const [drivers, setDrivers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -100,10 +124,14 @@ export default function FleetDrivers() {
             <div key={id} className="card" style={{ padding: 10, marginBottom: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <div>
-                  <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                  <div className="row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <b>{d.name}</b>
                     <span className={`badge ${badge.cls}`}>{badge.label}</span>
                     {d.isOnline && <span className="badge badge-green">online</span>}
+                    {(() => {
+                      const ab = ambulanceBadge(d);
+                      return ab ? <span className={`badge ${ab.cls}`}>{ab.label}</span> : null;
+                    })()}
                   </div>
                   <div className="small muted" style={{ marginTop: 2 }}>
                     {d.phone || '—'} · {d.assignedVehicleId ? `Vehicle ${vehicleNumber(d.assignedVehicleId)}` : 'Unassigned'}
