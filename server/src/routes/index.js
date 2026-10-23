@@ -13,7 +13,7 @@ import notificationRoutes from './notification.routes.js';
 import ambulanceRoutes from './ambulance.routes.js';
 import Ride from '../models/Ride.js';
 import { haversineKm } from '../utils/pricing.js';
-import { getFeedbackConfig, getAdsConfig, getSafetyTipsConfig, getBikeTaxiConfig, getUpiConfig, getContactConfig, getChatbotConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, resolveFarePolicy, INDIA_STATES, stateName } from '../services/settings.js';
+import { getFeedbackConfig, getAdsConfig, getSafetyTipsConfig, getBikeTaxiConfig, getUpiConfig, getContactConfig, getChatbotConfig, getSeatBookingConfig, getComplianceConfig, getEmergencyConfig, getOffersConfig, resolveFarePolicy, INDIA_STATES, stateName } from '../services/settings.js';
 
 export default function routes(io) {
   const router = Router();
@@ -82,6 +82,12 @@ export default function routes(io) {
     try {
       res.json({ feedbackConfig: await getFeedbackConfig() });
     } catch (err) { res.json({ feedbackConfig: { enabled: true, discountAmount: 10 } }); }
+  });
+
+  router.get('/offers-config', async (_req, res) => {
+    try {
+      res.json({ offersConfig: await getOffersConfig() });
+    } catch (err) { res.json({ offersConfig: { enabled: true, showInNav: true, showPromoCode: true } }); }
   });
   // Public ads config â€” clients use this to show/hide ads
   router.get('/ads-config', async (_req, res) => {

@@ -91,6 +91,7 @@ export default function RiderHome() {
   const [patientConsent, setPatientConsent] = useState(false);
   const [waitingAtPickup, setWaitingAtPickup] = useState(false);
   const [ambulanceCfg, setAmbulanceCfg] = useState(null);
+  const [offersCfg, setOffersCfg] = useState({ showPromoCode: true });
 
   const currentUserId = JSON.parse(localStorage.getItem('btl_user') || '{}')?.id;
 
@@ -167,6 +168,7 @@ export default function RiderHome() {
         }
       })
       .catch(() => {});
+    client.get('/offers-config').then(({ data }) => setOffersCfg(data.offersConfig || { showPromoCode: true })).catch(() => {});
   }, [searchParams]);
 
   const refreshActive = useCallback(async () => {
@@ -875,19 +877,23 @@ export default function RiderHome() {
                   )}
 
                   <div className="field" style={{ marginTop: 12 }}>
-                    <label>{t('riderhome.promoLabel')}</label>
-                    <input
-                      className="input"
-                      value={promo}
-                      onChange={(e) => setPromo(e.target.value.toUpperCase())}
-                      placeholder={t('riderhome.promoPlaceholder')}
-                    />
-                    {promoInfo?.error && <div className="err-box" style={{ marginTop: 8 }}>{promoInfo.error}</div>}
-                    {promoInfo?.discount > 0 && (
-                      <div className="small" style={{ color: 'var(--green)', marginTop: 8 }}>
-                        🏷️ {promoInfo.description} — {t('riderhome.promoApplied', { amount: formatINR(promoInfo.discount) })}
-                      </div>
-                    )}
+                  {(offersCfg.showPromoCode !== false) && (
+                    <>
+                      <label>{t('riderhome.promoLabel')}</label>
+                      <input
+                        className="input"
+                        value={promo}
+                        onChange={(e) => setPromo(e.target.value.toUpperCase())}
+                        placeholder={t('riderhome.promoPlaceholder')}
+                      />
+                      {promoInfo?.error && <div className="err-box" style={{ marginTop: 8 }}>{promoInfo.error}</div>}
+                      {promoInfo?.discount > 0 && (
+                        <div className="row spread" style={{ marginTop: 6 }}>
+                          <span className="muted" style={{ color: 'var(--green)' }}>🎉 {promoInfo.description} - {t('riderhome.promoApplied', { amount: formatINR(promoInfo.discount) })}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                   </div>
 
                   {seatsEnabled && (

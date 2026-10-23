@@ -68,6 +68,10 @@ const settingsSchema = new mongoose.Schema(
       type: Object,
       default: {},
     },
+    offersConfig: {
+      type: Object,
+      default: { enabled: true, showInNav: true, showPromoCode: true },
+    },
   },
   { timestamps: true }
 );

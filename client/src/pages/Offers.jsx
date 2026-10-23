@@ -122,10 +122,27 @@ function OfferCard({ offer, index }) {
 
 export default function Offers() {
   const [fbCfg, setFbCfg] = useState({ enabled: true, discountAmount: 10 });
+  const [offersCfg, setOffersCfg] = useState({ enabled: true });
 
   useEffect(() => {
     client.get('/feedback-config').then(({ data }) => setFbCfg(data.feedbackConfig || {})).catch(() => {});
+    client.get('/offers-config').then(({ data }) => setOffersCfg(data.offersConfig || { enabled: true })).catch(() => {});
   }, []);
+
+  if (offersCfg.enabled === false) {
+    return (
+      <div>
+        <Nav />
+        <div className="page">
+          <div className="card" style={{ textAlign: 'center', padding: 40 }}>
+            <h2 style={{ marginTop: 0 }}>Offers</h2>
+            <p className="muted">Offers are currently disabled.</p>
+            <Link to="/ride" className="btn btn-primary">Book a ride</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

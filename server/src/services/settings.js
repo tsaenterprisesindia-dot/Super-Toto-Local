@@ -874,6 +874,25 @@ export async function isAmbulanceEnabledForState(stateCode) {
   return cfg.enabledStates.map((s) => String(s).trim().toUpperCase()).includes(String(stateCode).trim().toUpperCase());
 }
 
+export const OFFERS_CONFIG_DEFAULTS = { enabled: true, showInNav: true, showPromoCode: true };
+
+export async function getOffersConfig() {
+  const doc = await Settings.findOne();
+  const stored = doc?.offersConfig || {};
+  return { ...OFFERS_CONFIG_DEFAULTS, ...stored };
+}
+
+export async function saveOffersConfig(input = {}) {
+  const doc = (await Settings.findOne()) || new Settings();
+  const cfg = { ...OFFERS_CONFIG_DEFAULTS };
+  if (input.enabled !== undefined) cfg.enabled = input.enabled === true || input.enabled === 'true';
+  if (input.showInNav !== undefined) cfg.showInNav = input.showInNav === true || input.showInNav === 'true';
+  if (input.showPromoCode !== undefined) cfg.showPromoCode = input.showPromoCode === true || input.showPromoCode === 'true';
+  doc.offersConfig = cfg;
+  await doc.save();
+  return cfg;
+}
+
 // ─── Driver Training Configuration ────────────────────────────────────────────
 
 export const TRAINING_DEFAULTS = {

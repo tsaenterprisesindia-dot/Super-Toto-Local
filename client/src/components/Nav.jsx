@@ -10,6 +10,11 @@ import logo from '../assets/super-toto-logo.png';
 
 export default function Nav() {
   const { user, logout } = useAuth();
+  const [offersCfg, setOffersCfg] = useState({ showInNav: true });
+
+  useEffect(() => {
+    client.get('/offers-config').then(({ data }) => setOffersCfg(data.offersConfig || { showInNav: true })).catch(() => {});
+  }, []);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [contact, setContact] = useState({ helplinePhone: '', helplineLabel: '', showHelpline: true });
@@ -41,9 +46,11 @@ export default function Nav() {
             <NavLink to="/ride" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
               {t('nav.bookAToto')}
             </NavLink>
-            <NavLink to="/offers" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-              {t('nav.offers')}
-            </NavLink>
+            {offersCfg.showInNav !== false && (
+              <NavLink to="/offers" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                {t('nav.offers')}
+              </NavLink>
+            )}
             <NavLink to="/history" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
               {t('nav.myRides')}
             </NavLink>

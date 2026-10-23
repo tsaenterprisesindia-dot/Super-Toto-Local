@@ -9,7 +9,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toCashDTO, cashStatus } from '../services/cashSettlement.js';
 import { SafetyEvent } from '../models/SafetyEvent.js';
 import { Promo } from '../models/Promo.js';
-import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, getEmergencyConfig, saveEmergencyConfig, getAmbulanceConfig, saveAmbulanceConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy, getGstConfig, saveGstConfig } from '../services/settings.js';
+import { getPricingConfig, savePricingConfig, getVehicleRatesConfig, saveVehicleRatesConfig, getFeedbackConfig, saveFeedbackConfig, getAdsConfig, saveAdsConfig, getSafetyTipsConfig, saveSafetyTipsConfig, getBikeTaxiConfig, saveBikeTaxiConfig, getUpiConfig, saveUpiConfig, getContactConfig, saveContactConfig, getChatbotConfig, saveChatbotConfig, getSeatBookingConfig, saveSeatBookingConfig, getComplianceConfig, saveComplianceConfig, getTrainingConfig, saveTrainingConfig, getEmergencyConfig, saveEmergencyConfig, getAmbulanceConfig, saveAmbulanceConfig, getOffersConfig, saveOffersConfig, INDIA_STATES, getStateFares, getStateFarePolicy, saveStateFarePolicy, getGstConfig, saveGstConfig } from '../services/settings.js';
 import { PRICING, VEHICLE_TYPES } from '../utils/pricing.js';
 import { notifyUser } from '../services/notify.js';
 import AmbulanceCompliance from '../models/AmbulanceCompliance.js';
@@ -1008,6 +1008,19 @@ export default function adminRoutes(io) {
     try {
       const ambulanceConfig = await saveAmbulanceConfig(req.body || {});
       res.json({ ambulanceConfig, message: 'Ambulance config updated' });
+    } catch (err) { next(err); }
+  });
+
+  router.get('/offers-config', async (_req, res, next) => {
+    try {
+      res.json({ offersConfig: await getOffersConfig() });
+    } catch (err) { next(err); }
+  });
+
+  router.put('/offers-config', async (req, res, next) => {
+    try {
+      const offersConfig = await saveOffersConfig(req.body || {});
+      res.json({ offersConfig, message: 'Offers config updated' });
     } catch (err) { next(err); }
   });
 
